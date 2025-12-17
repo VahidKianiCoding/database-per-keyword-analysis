@@ -95,3 +95,33 @@ class TelegramDataPipeline:
             else:
                 print("⚠️ No relevant data found.")
                 return pd.DataFrame()
+    
+    def _filter_and_tag(self, df):
+        """
+        Checks each row against all industry patterns.
+        A post can belong to multiple industries.
+        """
+        # We need to drop rows with no text first
+        df = df.dropna(subset=['text'])
+        
+        # We will create a list to store indices of rows that match ANY category
+        # And also store the categories they matched
+        
+        matches = []
+        
+        for index, row in df.iterrows():
+            post_text = row['text']
+            matched_industries = []
+            
+            for industry, pattern in self.compiled_patterns.items():
+                if pattern.search(post_text):
+                    matched_industries.append(industry)
+            
+            if matched_industries:
+                # If the post matches at least one industry, keep it
+                # We add a new column 'industries' which is a list of matched categories
+                row_data = row.to_dict()
+                row_data['matched_industries'] = matched_industries
+                matches.append(row_data)
+        
+        return pd.DataFrame(matches)
