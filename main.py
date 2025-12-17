@@ -272,3 +272,69 @@ class TelegramIndustryAnalyzer:
             
         print(">> NLP analysis complete.")
         return freq_report
+    
+    
+    def plot_visualizations(self, stats_report, freq_report):
+        """
+        Generates and saves the requested plots using Matplotlib and Seaborn.
+        """
+        print(">> Generating visualizations...")
+        sns.set_theme(style="whitegrid")
+        # Note: You might need to set a Persian font for Matplotlib to display Farsi labels correctly
+        # plt.rcParams['font.family'] = 'Vazir' # Example font
+        
+        # 1. Bar Chart: Compare Post Counts per Industry
+        plt.figure(figsize=(10, 6))
+        counts = {k: v['count'] for k, v in stats_report.items()}
+        sns.barplot(x=list(counts.keys()), y=list(counts.values()), palette="viridis")
+        plt.title("Total Posts per Industry (Last 12 Months)")
+        plt.xticks(rotation=45)
+        plt.tight_layout()
+        plt.savefig("chart_1_industry_counts.png")
+        plt.close()
+
+        # 2. Line Chart: Time Trend (Weekly)
+        # We need to aggregate data by date for this
+        plt.figure(figsize=(12, 6))
+        for industry in self.keywords.keys():
+            col_name = f"is_{industry}"
+            df_ind = self.processed_data[self.processed_data[col_name] == True].copy()
+            # Group by week
+            weekly_counts = df_ind.resample('W', on='full_date').size()
+            plt.plot(weekly_counts.index, weekly_counts.values, label=industry)
+        
+        plt.title("Weekly Post Trend per Industry")
+        plt.legend()
+        plt.tight_layout()
+        plt.savefig("chart_2_time_trend.png")
+        plt.close()
+
+        # 3. Bar Chart: Top Channels for one industry (Example: Steel_Chain)
+        # We can loop to create for all, but here is an example for Steel
+        target_industry = 'Steel_Chain'
+        if target_industry in stats_report:
+            top_ch = stats_report[target_industry]['top_channels']
+            plt.figure(figsize=(10, 6))
+            sns.barplot(x=top_ch.values, y=top_ch.index, palette="magma")
+            plt.title(f"Top 10 Channels by Views - {target_industry}")
+            plt.tight_layout()
+            plt.savefig(f"chart_3_top_channels_{target_industry}.png")
+            plt.close()
+
+        print(">> Charts saved successfully.")
+        
+# --- Usage Example ---
+if __name__ == "__main__":
+    # Initialize
+    analyzer = TelegramIndustryAnalyzer(DB_CONFIG, INDUSTRY_KEYWORDS)
+    
+    # Run Pipeline (Example for 1 year)
+    analyzer.fetch_and_filter_data('2024-01-01', '2025-01-01')
+    analyzer.categorize_posts()
+    
+    # Reports
+    stats = analyzer.generate_stats_report()
+    freq = analyzer.analyze_word_frequency()
+    
+    # Plots
+    analyzer.plot_visualizations(stats, freq)
