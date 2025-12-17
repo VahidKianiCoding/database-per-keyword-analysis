@@ -223,3 +223,52 @@ class TelegramIndustryAnalyzer:
             print(f"Top Channel: {top_channels.index[0] if not top_channels.empty else 'N/A'}")
 
         return report
+    
+    
+    def analyze_word_frequency(self, top_n=50):
+        """
+        Performs NLP analysis: normalization, stopword removal, and word frequency counting.
+        
+        Args:
+            top_n (int): Number of top words to retrieve.
+            
+        Returns:
+            dict: {industry: [(word, count), ...]}
+        """
+        print(">> Starting NLP analysis (Word Frequency)...")
+        normalizer = Normalizer()
+        
+        # Load Persian stopwords
+        # Adding custom stopwords common in social media/news
+        stops = set(stopwords_list())
+        custom_stops = {'در', 'به', 'از', 'که', 'می', 'این', 'است', 'را', 'با', 'های', 'برای', 'آن', 'یک', 'شود', 'شده', 'هزار', 'میلیون', 'تومان', 'ریال', 'سال', 'ماه', 'روز', 'گفت', 'افزود'}
+        stops.update(custom_stops)
+
+        freq_report = {}
+
+        for industry in self.keywords.keys():
+            col_name = f"is_{industry}"
+            industry_df = self.processed_data[self.processed_data[col_name] == True]
+            
+            if industry_df.empty:
+                freq_report[industry] = []
+                continue
+
+            # Concatenate all text for this industry
+            all_text = " ".join(industry_df['text'].astype(str).tolist())
+            
+            # Normalize text
+            normalized_text = normalizer.normalize(all_text)
+            
+            # Tokenize
+            tokens = word_tokenize(normalized_text)
+            
+            # Remove stopwords and short tokens (junk)
+            clean_tokens = [t for t in tokens if t not in stops and len(t) > 2]
+            
+            # Count frequency
+            counter = Counter(clean_tokens)
+            freq_report[industry] = counter.most_common(top_n)
+            
+        print(">> NLP analysis complete.")
+        return freq_report
