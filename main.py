@@ -184,3 +184,42 @@ class TelegramIndustryAnalyzer:
         # Convert full_date to datetime if strictly needed for plotting later
         self.processed_data['full_date'] = pd.to_datetime(self.processed_data['full_date'])
         print(">> Categorization complete.")
+        
+    
+    def generate_stats_report(self):
+        """
+        Calculates statistics for each industry, extracts top posts and top channels.
+        
+        Returns:
+            dict: A dictionary containing stats per industry.
+        """
+        if self.processed_data is None:
+            return {}
+
+        report = {}
+        
+        for industry in self.keywords.keys():
+            col_name = f"is_{industry}"
+            # Filter data for this specific industry
+            industry_df = self.processed_data[self.processed_data[col_name] == True]
+            
+            # 1. Count posts
+            post_count = len(industry_df)
+            
+            # 2. Top posts by views (Top 20)
+            top_posts = industry_df.nlargest(20, 'views')[['full_date', 'channel_username', 'views', 'text']]
+            
+            # 3. Top channels by total views in this industry
+            top_channels = industry_df.groupby('channel_username')['views'].sum().nlargest(10)
+            
+            report[industry] = {
+                'count': post_count,
+                'top_posts': top_posts,
+                'top_channels': top_channels
+            }
+            
+            print(f"--- Stats for {industry} ---")
+            print(f"Total Posts: {post_count}")
+            print(f"Top Channel: {top_channels.index[0] if not top_channels.empty else 'N/A'}")
+
+        return report
