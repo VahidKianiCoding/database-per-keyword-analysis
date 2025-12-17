@@ -10,6 +10,16 @@ import os
 from tqdm import tqdm
 from urllib.parse import quote_plus
 from dotenv import load_dotenv
+from wordcloud import WordCloud
+
+# Libraries for correct Persian text rendering in plots
+try:
+    import arabic_reshaper
+    from bidi.algorithm import get_display
+    HAS_RESHAPER = True
+except ImportError:
+    HAS_RESHAPER = False
+    print("Warning: 'arabic-reshaper' or 'python-bidi' not installed. Persian text in plots might look disjointed.")
 
 load_dotenv()
 
@@ -55,6 +65,13 @@ INDUSTRY_KEYWORDS = {
         'پروانه بهره‌برداری', 'زغال سنگ'
     ]
 }
+
+def make_farsi_text_readable(text):
+    """Reshapes Farsi text for Matplotlib if libraries are available."""
+    if HAS_RESHAPER:
+        reshaped_text = arabic_reshaper.reshape(text)
+        return get_display(reshaped_text)
+    return text
 
 class TelegramIndustryAnalyzer:
     """
@@ -381,7 +398,7 @@ if __name__ == "__main__":
         
             # Calculate dynamic dates: Today and 1 year ago
             today = datetime.now()
-            one_year_ago = today - timedelta(days=365)
+            one_year_ago = today - timedelta(days=30)
             
             # Convert to string format 'YYYY-MM-DD'
             end_date_str = today.strftime('%Y-%m-%d')
