@@ -348,19 +348,33 @@ class TelegramIndustryAnalyzer:
             plt.close()
 
         print(">> Charts saved successfully.")
+
         
-# --- Usage Example ---
 if __name__ == "__main__":
     # Initialize
-    analyzer = TelegramIndustryAnalyzer(DB_CONFIG, INDUSTRY_KEYWORDS)
-    
-    # Run Pipeline (Example for 1 year)
-    analyzer.fetch_and_filter_data('2024-01-01', '2025-01-01')
-    analyzer.categorize_posts()
-    
-    # Reports
-    stats = analyzer.generate_stats_report()
-    freq = analyzer.analyze_word_frequency()
-    
-    # Plots
-    analyzer.plot_visualizations(stats, freq)
+    try:
+        analyzer = TelegramIndustryAnalyzer(DB_CONFIG, INDUSTRY_KEYWORDS)
+        
+        # Calculate dynamic dates: Today and 1 year ago
+        today = datetime.now()
+        one_year_ago = today - timedelta(days=365)
+        
+        # Convert to string format 'YYYY-MM-DD'
+        end_date_str = today.strftime('%Y-%m-%d')
+        start_date_str = one_year_ago.strftime('%Y-%m-%d')
+        
+        print(f">> Dynamic Mode: Fetching data from {start_date_str} to {end_date_str}")
+
+        # Run Pipeline
+        analyzer.fetch_and_filter_data(start_date_str, end_date_str)
+        analyzer.categorize_posts()
+        
+        # Reports
+        stats = analyzer.generate_stats_report()
+        freq = analyzer.analyze_word_frequency()
+        
+        # Plots
+        analyzer.plot_visualizations(stats, freq)
+        
+    except Exception as e:
+        print(f"CRITICAL ERROR: {e}")
