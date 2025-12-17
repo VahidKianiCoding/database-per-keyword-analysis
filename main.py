@@ -48,3 +48,50 @@ class TelegramDataPipeline:
             industry: re.compile('|'.join(keywords)) 
             for industry, keywords in self.industries.items()
         }
+
+    
+    def fetch_data_by_month(self, start_date, months_back=12):
+            """
+            Fetches data month by month to avoid memory/network overload.
+            """
+            all_relevant_data = []
+            
+            end_date = datetime.strptime(start_date, "%Y-%m-%d")
+            # Go back 'months_back' months from start_date
+            # We process from Past -> Present or Present -> Past. 
+            # Let's do month by month chunks.
+            
+            print(f"🚀 Starting extraction for the last {months_back} months...")
+            
+            for i in tqdm(range(months_back)):
+                # Calculate time window for this chunk
+                month_end = end_date - timedelta(days=30 * i)
+                month_start = month_end - timedelta(days=30)
+                
+                query = f"""
+                SELECT text, full_date, channel_username, views
+                FROM telegram_channel_post
+                WHERE full_date >= '{month_start.strftime('%Y-%m-%d')}' 
+                  AND full_date < '{month_end.strftime('%Y-%m-%d')}'
+                """
+                
+                try:
+                    # Execute query
+                    df_chunk = pd.read_sql(query, self.engine)
+                    
+                    if not df_chunk.empty:
+                        # Filter in memory (Fast with 64GB RAM)
+                        processed_chunk = self._filter_and_tag(df_chunk)
+                        if not processed_chunk.empty:
+                            all_relevant_data.append(processed_chunk)
+                            
+                except Exception as e:
+                    print(f"❌ Error fetching data for {month_start} to {month_end}: {e}")
+    
+            if all_relevant_data:
+                final_df = pd.concat(all_relevant_data, ignore_index=True)
+                print(f"✅ Data Extraction Complete. Total relevant posts found: {len(final_df)}")
+                return final_df
+            else:
+                print("⚠️ No relevant data found.")
+                return pd.DataFrame()
