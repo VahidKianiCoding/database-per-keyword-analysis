@@ -7,6 +7,7 @@ from collections import Counter
 import re
 from datetime import datetime, timedelta
 import os
+from tqdm import tqdm
 from urllib.parse import quote_plus
 from dotenv import load_dotenv
 
@@ -38,7 +39,7 @@ INDUSTRY_KEYWORDS = {
     ],
     'Non_Ferrous_Metals': [
         'آلومینیوم', 'فلزات غیرآهنی', 'شمش آلومینیوم', 'کنسانتره مس', 'شمش مس',
-        'توسعه زنجیره مس', 'نیکل', 'روی', 'سهام ملی صنایع مس', 'سهام فملی',
+        'توسعه زنجیره مس', 'نیکل', 'سرب و روی', 'سهام ملی صنایع مس', 'سهام فملی', # روی -> سرب و روی
         'معدن مس سرچشمه', 'شمش روی', 'کاتد مس', 'قیمت جهانی مس'
     ],
     'Water_Industry': [
@@ -273,28 +274,33 @@ class TelegramIndustryAnalyzer:
             if industry_df.empty:
                 freq_report[industry] = []
                 continue
-
-            # Concatenate all text
-            all_text = " ".join(industry_df['text'].astype(str).tolist())
             
-            # Normalize text (converting Arabic chars to Persian, etc.)
-            normalized_text = normalizer.normalize(all_text)
+            print(f"   Analying {industry} ({len(industry_df)} posts)...")
             
-            # Tokenize using Hazm is implicit in many workflows, but here we do simple split first
-            # Or use word_tokenize from hazm for better accuracy:
-            tokens = word_tokenize(normalized_text)
+            # Counter for this industry
+            industry_counter = Counter()
             
-            # Filter tokens: remove stopwords, punctuation, and short words
-            clean_tokens = [
-                word for word in tokens 
-                if word not in all_stops 
-                and len(word) > 2
-                and not word.isnumeric() # Remove pure numbers
-            ]
+            # Process text row by row with progress bar
+            # Using dropna() to ensure no errors on empty texts
+            texts = industry_df['text'].dropna().astype(str).tolist()
             
-            # Count frequency
-            counter = Counter(clean_tokens)
-            freq_report[industry] = counter.most_common(top_n)
+            for text in tqdm(texts, desc=f"Processing {industry}", unit="post"):
+                # Normalize
+                normalized = normalizer.normalize(text)
+                # Tokenize (using simple split for speed, or word_tokenize for precision)
+                # Using simple split is MUCH faster for large datasets and usually enough for word clouds
+                # If you want high precision, use: tokens = word_tokenize(normalized)
+                tokens = normalized.split() 
+                
+                clean_tokens = [
+                    t for t in tokens 
+                    if t not in all_stops 
+                    and len(t) > 2 
+                    and not t.isnumeric()
+                ]
+                industry_counter.update(clean_tokens)
+            
+            freq_report[industry] = industry_counter.most_common(top_n)
             
         print(">> NLP analysis complete.")
         return freq_report
