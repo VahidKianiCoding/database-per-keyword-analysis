@@ -1,14 +1,18 @@
 import pandas as pd
-import sqlalchemy
-from sqlalchemy import text
-from datetime import datetime, timedelta
+import seaborn as sns
+import matplotlib.pyplot as plt
+from sqlalchemy import create_engine, text
+from hazm import word_tokenize, Normalizer, stopwords_list
+from collections import Counter
 import re
-from tqdm import tqdm # For progress bar
+from datetime import datetime, timedelta
 import os
 from dotenv import load_dotenv
 
 load_dotenv()
 
+# Configuration for Database Connection
+# Replace with your actual credentials in your .env based on sample.env
 DB_CONFIG = {
     "DB_USER": os.getenv("DB_USER"),
     "DB_PASS": os.getenv("DB_PASS"),
@@ -19,6 +23,38 @@ DB_CONFIG = {
 
 connection_string = f"mysql+pymysql://{DB_CONFIG['DB_USER']}:{DB_CONFIG['DB_PASS']}@{DB_CONFIG['DB_HOST']}:{DB_CONFIG['DB_PORT']}/{DB_CONFIG['DB_NAME']}"
 
+# Industry Keywords Definition
+# Organized by sectors as requested
+INDUSTRY_KEYWORDS = {
+    'Petrochemical': [
+        'پتروشیمی خلیج فارس', 'تحریم پتروشیمی', 'خوراک پتروشیمی', 'خوراک گاز',
+        'محدودیت گاز', 'قطع گاز', 'ناترازی گاز', 'اوره', 'آمونیاک', 'متانول',
+        'پتروپالایش', 'رفع آلایندگی', 'بنزین پتروشیمی', 'گاز طبیعی', 'صنعت پتروشیمی'
+    ],
+    'Steel_Chain': [
+        'صنایع فولاد', 'انرژی فولاد', 'گاز فولاد', 'آلیاژ', 'صنعت فولاد',
+        'ورق فولادی', 'آهن اسفنجی', 'کنسانتره سنگ آهن', 'تیرآهن', 'فولاد ایران',
+        'شمش فولاد', 'زنجیره مس', 'شمش فولادی', 'مدیریت فولاد', 'مواد اولیه',
+        'فولاد خوزستان', 'فولاد مبارکه', 'ذوب آهن', 'ناترازی انرژی', 'صادرات فولاد'
+    ],
+    'Non_Ferrous_Metals': [
+        'آلومینیوم', 'فلزات غیرآهنی', 'شمش آلومینیوم', 'کنسانتره مس', 'شمش مس',
+        'توسعه زنجیره مس', 'نیکل', 'روی', 'سهام ملی صنایع مس', 'سهام فملی',
+        'معدن مس سرچشمه', 'شمش روی', 'کاتد مس', 'قیمت جهانی مس'
+    ],
+    'Water_Industry': [
+        'بحران آب', 'انتقال آب دریا', 'انتقال آب خلیج فارس به فلات مرکزی',
+        'مدیریت آب', 'آلودگی آب', 'قطعی آب', 'زاینده‌رود', 'آب شیرین‌کن',
+        'فرونشست زمین', 'مدیریت منابع آب', 'آبخیزداری', 'آب شیرین‌کن دریایی',
+        'آبفا', 'تصفیه فاضلاب', 'لایروبی', 'بارورسازی ابرها',
+        'سفره‌های آب زیرزمینی', 'حق آبه', 'بحران کم‌آبی'
+    ],
+    'Mining': [
+        'سنگ آهن', 'کنسانتره', 'گندله', 'معدن طلا', 'ایمیدرو', 'حفاری اکتشافی',
+        'ماشین‌آلات معدنی', 'دامپتراک', 'فلوتاسیون', 'لیچینگ',
+        'پروانه بهره‌برداری', 'زغال سنگ'
+    ]
+}
 
 class TelegramDataPipeline:
     def __init__(self, db_connection_str):
