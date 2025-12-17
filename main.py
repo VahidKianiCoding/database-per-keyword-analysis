@@ -92,3 +92,70 @@ class TelegramIndustryAnalyzer:
             pattern_str = '|'.join([re.escape(k) for k in keys])
             patterns[industry] = pattern_str
         return patterns
+    
+    def fetch_and_filter_data(self, start_date, end_date):
+        """
+        Fetches data month-by-month to manage memory, filters by keywords immediately,
+        and aggregates relevant posts.
+
+        Args:
+            start_date (str): Start date in 'YYYY-MM-DD' format.
+            end_date (str): End date in 'YYYY-MM-DD' format.
+        """
+        print(f">> Starting data fetch from {start_date} to {end_date}...")
+        
+        # Convert strings to datetime objects
+        current_date = pd.to_datetime(start_date)
+        end = pd.to_datetime(end_date)
+        
+        all_relevant_posts = []
+        patterns = self._get_regex_patterns()
+
+        # Iterate month by month
+        while current_date < end:
+            # Define the window for the current query (1 month)
+            next_month = current_date + pd.DateOffset(months=1)
+            # Ensure we don't go past the end date
+            query_end = min(next_month, end)
+            
+            print(f"   Processing batch: {current_date.date()} to {query_end.date()}")
+
+            # SQL Query for the specific time window
+            # We select ONLY necessary columns to reduce I/O
+            query = text("""
+                SELECT text, full_date, channel_username, views
+                FROM telegram_channel_post
+                WHERE full_date >= :start AND full_date < :end
+                AND text IS NOT NULL
+            """)
+            
+            # Fetch data using pandas read_sql
+            # params prevents SQL injection and handles date formatting
+            df_batch = pd.read_sql(query, self.engine, params={"start": current_date, "end": query_end})
+            
+            if not df_batch.empty:
+                # Filter logic: Check if text contains ANY keyword from ANY industry
+                # We combine all industry patterns into one huge regex for the first pass filter
+                # This drastically reduces rows before detailed categorization
+                full_pattern = '|'.join(patterns.values())
+                mask = df_batch['text'].str.contains(full_pattern, regex=True, na=False)
+                
+                relevant_batch = df_batch[mask].copy()
+                
+                # If we found relevant posts, append them to our list
+                if not relevant_batch.empty:
+                    all_relevant_posts.append(relevant_batch)
+                    print(f"   -> Found {len(relevant_batch)} relevant posts in this batch.")
+                else:
+                    print("   -> No relevant posts found in this batch.")
+            
+            # Move to next month
+            current_date = next_month
+
+        # Concatenate all batches into a single DataFrame
+        if all_relevant_posts:
+            self.processed_data = pd.concat(all_relevant_posts, ignore_index=True)
+            print(f">> Total relevant posts fetched: {len(self.processed_data)}")
+        else:
+            self.processed_data = pd.DataFrame()
+            print(">> No relevant posts found in the entire period.")
