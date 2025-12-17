@@ -357,30 +357,64 @@ class TelegramIndustryAnalyzer:
 
         
 if __name__ == "__main__":
+    # Settings
+    CSV_FILENAME = "telegram_industry_data.csv"
+    FORCE_FETCH = False  # Set to True if you want to ignore the CSV and fetch fresh data from DB
+    
     # Initialize
     try:
         analyzer = TelegramIndustryAnalyzer(DB_CONFIG, INDUSTRY_KEYWORDS)
         
-        # Calculate dynamic dates: Today and 1 year ago
-        today = datetime.now()
-        one_year_ago = today - timedelta(days=365)
+        # Check if local cache exists
+        if os.path.exists(CSV_FILENAME) and not FORCE_FETCH:
+            print(f">> Local cache found: {CSV_FILENAME}")
+            print(">> Loading data from disk (FAST MODE)...")
+            
+            # Read CSV
+            # parse_dates ensures 'full_date' is read as datetime object, not string
+            analyzer.processed_data = pd.read_csv(CSV_FILENAME, parse_dates=['full_date'])
+            print(f">> Loaded {len(analyzer.processed_data)} posts from local file.")
+            
+        else:
+            print(">> No local cache found (or FORCE_FETCH is True).")
+            print(">> Fetching data from Database (SLOW MODE)...")
         
-        # Convert to string format 'YYYY-MM-DD'
-        end_date_str = today.strftime('%Y-%m-%d')
-        start_date_str = one_year_ago.strftime('%Y-%m-%d')
+            # Calculate dynamic dates: Today and 1 year ago
+            today = datetime.now()
+            one_year_ago = today - timedelta(days=365)
+            
+            # Convert to string format 'YYYY-MM-DD'
+            end_date_str = today.strftime('%Y-%m-%d')
+            start_date_str = one_year_ago.strftime('%Y-%m-%d')
+            
+            # Run Fetch Pipeline
+            analyzer.fetch_and_filter_data(start_date_str, end_date_str)
         
-        print(f">> Dynamic Mode: Fetching data from {start_date_str} to {end_date_str}")
-
-        # Run Pipeline
-        analyzer.fetch_and_filter_data(start_date_str, end_date_str)
-        analyzer.categorize_posts()
+            # Save to CSV for next time
+            if analyzer.processed_data is not None and not analyzer.processed_data.empty:
+                # Categorize
+                analyzer.categorize_posts()
+                print(f">> Saving data to {CSV_FILENAME} for future runs...")
+                analyzer.processed_data.to_csv(CSV_FILENAME, index=False, encoding='utf-8-sig')
+                print(">> Save complete.")
         
-        # Reports
-        stats = analyzer.generate_stats_report()
-        freq = analyzer.analyze_word_frequency()
-        
-        # Plots
-        analyzer.plot_visualizations(stats, freq)
+        if analyzer.processed_data is not None and not analyzer.processed_data.empty:
+            # Categorize
+            analyzer.categorize_posts()
+            
+            # Reports
+            stats = analyzer.generate_stats_report()
+            
+            # Note: NLP might still take time, but now you can debug it without DB lag
+            freq = analyzer.analyze_word_frequency()
+            
+            # Plots
+            analyzer.plot_visualizations(stats, freq)
+        else:
+            print(">> No data available to process.")
         
     except Exception as e:
         print(f"CRITICAL ERROR: {e}")
+        # Print full traceback for debugging
+        import traceback
+        traceback.print_exc()
