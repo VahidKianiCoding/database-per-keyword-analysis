@@ -227,44 +227,58 @@ class TelegramIndustryAnalyzer:
     
     def analyze_word_frequency(self, top_n=50):
         """
-        Performs NLP analysis: normalization, stopword removal, and word frequency counting.
-        
-        Args:
-            top_n (int): Number of top words to retrieve.
-            
-        Returns:
-            dict: {industry: [(word, count), ...]}
+        Performs NLP analysis using 'hazm' library for normalization and stopword removal.
         """
         print(">> Starting NLP analysis (Word Frequency)...")
+        
+        # Initialize Hazm Normalizer
         normalizer = Normalizer()
         
-        # Load Persian stopwords
-        # Adding custom stopwords common in social media/news
-        stops = set(stopwords_list())
-        custom_stops = {'در', 'به', 'از', 'که', 'می', 'این', 'است', 'را', 'با', 'های', 'برای', 'آن', 'یک', 'شود', 'شده', 'هزار', 'میلیون', 'تومان', 'ریال', 'سال', 'ماه', 'روز', 'گفت', 'افزود'}
-        stops.update(custom_stops)
+        # 1. Get standard Persian stopwords from Hazm
+        hazm_stops = stopwords_list()
+        
+        # 2. Add domain-specific stopwords (optional but recommended for clean charts)
+        # These are noise words often found in news/telegram but not grammatical stopwords
+        domain_stops = [
+            'هزار', 'میلیون', 'میلیارد', 'تومان', 'ریال', 'دلار', 'درصد',
+            'سال', 'ماه', 'روز', 'شنبه', 'یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه',
+            'گزارش', 'خبر', 'ادامه', 'تصویر', 'لینک', 'عضو', 'کانال', 'سلام', 'درود'
+        ]
+        
+        # Combine both sets
+        all_stops = set(hazm_stops + domain_stops)
 
         freq_report = {}
 
         for industry in self.keywords.keys():
             col_name = f"is_{industry}"
+            # Check if dataframe exists and has the column
+            if col_name not in self.processed_data.columns:
+                continue
+
             industry_df = self.processed_data[self.processed_data[col_name] == True]
             
             if industry_df.empty:
                 freq_report[industry] = []
                 continue
 
-            # Concatenate all text for this industry
+            # Concatenate all text
             all_text = " ".join(industry_df['text'].astype(str).tolist())
             
-            # Normalize text
+            # Normalize text (converting Arabic chars to Persian, etc.)
             normalized_text = normalizer.normalize(all_text)
             
-            # Tokenize
+            # Tokenize using Hazm is implicit in many workflows, but here we do simple split first
+            # Or use word_tokenize from hazm for better accuracy:
             tokens = word_tokenize(normalized_text)
             
-            # Remove stopwords and short tokens (junk)
-            clean_tokens = [t for t in tokens if t not in stops and len(t) > 2]
+            # Filter tokens: remove stopwords, punctuation, and short words
+            clean_tokens = [
+                word for word in tokens 
+                if word not in all_stops 
+                and len(word) > 2
+                and not word.isnumeric() # Remove pure numbers
+            ]
             
             # Count frequency
             counter = Counter(clean_tokens)
