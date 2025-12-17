@@ -77,6 +77,7 @@ class TelegramIndustryAnalyzer:
         self.engine = create_engine(connection_str)
         print(">> Database engine initialized successfully.")
 
+    
     def _get_regex_patterns(self):
         """
         Internal helper to compile regex patterns for each industry.
@@ -92,6 +93,7 @@ class TelegramIndustryAnalyzer:
             pattern_str = '|'.join([re.escape(k) for k in keys])
             patterns[industry] = pattern_str
         return patterns
+    
     
     def fetch_and_filter_data(self, start_date, end_date):
         """
@@ -159,3 +161,26 @@ class TelegramIndustryAnalyzer:
         else:
             self.processed_data = pd.DataFrame()
             print(">> No relevant posts found in the entire period.")
+            
+            
+    def categorize_posts(self):
+        """
+        Tags each post with the specific industries it belongs to based on keywords.
+        Adds boolean columns for each industry (e.g., 'is_Petrochemical').
+        """
+        if self.processed_data is None or self.processed_data.empty:
+            print("No data to categorize. Run fetch_and_filter_data first.")
+            return
+
+        print(">> Categorizing posts into industries...")
+        patterns = self._get_regex_patterns()
+
+        # Create a column for each industry indicating if the post is relevant
+        for industry, pattern in patterns.items():
+            # Create a boolean column: True if pattern is found, False otherwise
+            col_name = f"is_{industry}"
+            self.processed_data[col_name] = self.processed_data['text'].str.contains(pattern, regex=True, na=False)
+        
+        # Convert full_date to datetime if strictly needed for plotting later
+        self.processed_data['full_date'] = pd.to_datetime(self.processed_data['full_date'])
+        print(">> Categorization complete.")
