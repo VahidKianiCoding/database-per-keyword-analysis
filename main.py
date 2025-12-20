@@ -159,16 +159,18 @@ class TelegramIndustryAnalyzer:
             ]
             self.stopwords = set(hazm_stops + domain_stops)
             
-            # 5. POS Tagger (Try to load model)
-            # You usually need 'postagger.model' file in the directory
-            tagger_path = 'postagger.model' 
-            if os.path.exists(tagger_path):
+            # 5. POS Tagger (Auto-Download / Cache Mode)
+            # This uses the official Hazm logic to fetch from HuggingFace if not present
+            try:
                 from hazm import POSTagger
-                self.tagger = POSTagger(model=tagger_path)
+                print(">> NLP: Initializing POS Tagger (This may download the model ~20MB if not cached)...")
+                self.tagger = POSTagger(repo_id="roshan-research/hazm-postagger", model_filename="pos_tagger.model") # type: ignore
                 print(">> NLP: POS Tagger loaded successfully (High Accuracy Mode).")
-            else:
+            except Exception as tag_err:
                 self.tagger = None
-                print(">> NLP: 'postagger.model' not found. Falling back to simple Lemmatization.")
+                print(f">> NLP: Warning - POS Tagger failed to load ({tag_err}).")
+                print("   -> Reason: Likely internet connection issue to HuggingFace or missing library.")
+                print("   -> Action: Falling back to simple Lemmatization (Less accurate but functional).")
                 
         except Exception as e:
             print(f"Error setting up Hazm: {e}")
