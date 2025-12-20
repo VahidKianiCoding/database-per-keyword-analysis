@@ -298,7 +298,16 @@ class TelegramIndustryAnalyzer:
         print(">> Starting NLP analysis (Global & Per Industry)...")
         
         # Initialize Hazm Normalizer
-        normalizer = Normalizer()
+        normalizer = Normalizer(
+            True, # correct_spacing
+            True, # remove_diacritics
+            True, # remove_specials_chars
+            True, # decrease_repeated_chars
+            True, # persian_style
+            True, # persian_numbers
+            True, # unicodes_replacement
+            True, # seperate_mi
+            )
         
         # 1. Get standard Persian stopwords from Hazm
         hazm_stops = stopwords_list()
@@ -482,6 +491,9 @@ if __name__ == "__main__":
     FORCE_FETCH = False  # Set to True to ignore cache and fetch fresh data from DB
     CSV_SEPARATOR = ','  # Change to '|' if your export used pipes
     
+    # Define column names manually because the CSV might miss headers
+    CSV_COLUMNS = ['text', 'full_date', 'channel_username', 'views']
+    
     # Initialize Analyzer
     # Note: DB connection will be attempted only if needed inside fetch method or if we pass config here
     analyzer = TelegramIndustryAnalyzer(DB_CONFIG, INDUSTRY_KEYWORDS)
@@ -515,7 +527,36 @@ if __name__ == "__main__":
         # Condition 2: Load from local cache
         else:
             print(f">> Mode: OFFLINE (Loading {CSV_FILENAME})")
-            analyzer.processed_data = pd.read_csv(CSV_FILENAME, parse_dates=['full_date'], sep=CSV_SEPARATOR)
+            
+            # Try reading with header first (default behavior)
+            try:
+                # We read the first row to check if it looks like a header
+                first_line = pd.read_csv(CSV_FILENAME, nrows=1, sep=CSV_SEPARATOR)
+                if 'full_date' in first_line.columns:
+                    # File HAS headers
+                    analyzer.processed_data = pd.read_csv(CSV_FILENAME, parse_dates=['full_date'], sep=CSV_SEPARATOR)
+                else:
+                    # File does NOT have headers (DataGrip export without column names)
+                    print("   -> No header detected. Assigning column names manually...")
+                    analyzer.processed_data = pd.read_csv(
+                        CSV_FILENAME, 
+                        header=None, 
+                        names=CSV_COLUMNS, 
+                        parse_dates=['full_date'], 
+                        sep=CSV_SEPARATOR
+                    )
+            except Exception as read_err:
+                print(f"   -> Standard read failed. Trying robust mode... ({read_err})")
+                # Fallback: Force manual names and skip bad lines
+                analyzer.processed_data = pd.read_csv(
+                    CSV_FILENAME, 
+                    header=None, 
+                    names=CSV_COLUMNS, 
+                    parse_dates=['full_date'], 
+                    sep=CSV_SEPARATOR,
+                    on_bad_lines='skip'
+                )
+
             data_loaded = True
             print(f">> Loaded {len(analyzer.processed_data)} records from disk.")
 
