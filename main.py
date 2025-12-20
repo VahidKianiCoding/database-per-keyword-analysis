@@ -346,54 +346,100 @@ class TelegramIndustryAnalyzer:
         return freq_report
     
     
-    def plot_visualizations(self, stats_report, freq_report):
+    def plot_visualizations(self, stats_report, freq_report, keyword_breakdown):
         """
         Generates and saves the requested plots using Matplotlib and Seaborn.
         """
-        print(">> Generating visualizations...")
+        print(">> Generating 5 visualizations...")
         sns.set_theme(style="whitegrid")
-        # Note: You might need to set a Persian font for Matplotlib to display Farsi labels correctly
-        # plt.rcParams['font.family'] = 'Vazir' # Example font
+        # Ensure a font that supports Arabic/Persian script is available on your OS
+        # 'Arial' usually supports it on Windows, otherwise install 'Vazir' or 'Tahoma'
+        plt.rcParams['font.family'] = 'Arial'
         
-        # 1. Bar Chart: Compare Post Counts per Industry
-        plt.figure(figsize=(10, 6))
-        counts = {k: v['count'] for k, v in stats_report.items()}
-        sns.barplot(x=list(counts.keys()), y=list(counts.values()), palette="viridis")
-        plt.title("Total Posts per Industry (Last 12 Months)")
-        plt.xticks(rotation=45)
-        plt.tight_layout()
-        plt.savefig("chart_1_industry_counts.png")
-        plt.close()
-
-        # 2. Line Chart: Time Trend (Weekly)
-        # We need to aggregate data by date for this
-        plt.figure(figsize=(12, 6))
-        for industry in self.keywords.keys():
-            col_name = f"is_{industry}"
-            df_ind = self.processed_data[self.processed_data[col_name] == True].copy()
-            # Group by week
-            weekly_counts = df_ind.resample('W', on='full_date').size()
-            plt.plot(weekly_counts.index, weekly_counts.values, label=industry)
-        
-        plt.title("Weekly Post Trend per Industry")
-        plt.legend()
-        plt.tight_layout()
-        plt.savefig("chart_2_time_trend.png")
-        plt.close()
-
-        # 3. Bar Chart: Top Channels for one industry (Example: Steel_Chain)
-        # We can loop to create for all, but here is an example for Steel
-        target_industry = 'Steel_Chain'
-        if target_industry in stats_report:
-            top_ch = stats_report[target_industry]['top_channels']
+        # 1. Bar Chart: Total Posts per Industry
+        if stats_report:
             plt.figure(figsize=(10, 6))
-            sns.barplot(x=top_ch.values, y=top_ch.index, palette="magma")
-            plt.title(f"Top 10 Channels by Views - {target_industry}")
+            counts = {make_farsi_text_readable(k): v['count'] for k, v in stats_report.items()}
+            sns.barplot(x=list(counts.keys()), y=list(counts.values()), palette="viridis")
+            plt.title(make_farsi_text_readable("Total Posts per Industry")) # type: ignore
+            plt.xticks(rotation=45)
             plt.tight_layout()
-            plt.savefig(f"chart_3_top_channels_{target_industry}.png")
+            plt.savefig("1_industry_counts.png")
             plt.close()
 
-        print(">> Charts saved successfully.")
+        # 2. Bar Chart: Keyword Breakdown (Top 10 keywords per industry)
+        if keyword_breakdown:
+            for industry, keys_data in keyword_breakdown.items():
+                if not keys_data: continue
+                top_keys = dict(list(keys_data.items())[:10])
+                
+                plt.figure(figsize=(12, 6))
+                labels = [make_farsi_text_readable(k) for k in top_keys.keys()]
+                sns.barplot(x=list(top_keys.values()), y=labels, palette="rocket")
+                plt.title(make_farsi_text_readable(f"Most-Used Keywords in {industry}")) # type: ignore
+                plt.xlabel("Count")
+                plt.tight_layout()
+                plt.savefig(f"2_keywords_{industry}.png")
+                plt.close()
+
+        # 3. Bar Chart: Top Channels by Views
+        if stats_report:
+            for industry, data in stats_report.items():
+                top_ch = data['top_channels']
+                if top_ch.empty: continue
+                
+                plt.figure(figsize=(10, 6))
+                sns.barplot(x=top_ch.values, y=top_ch.index, palette="mako")
+                plt.title(make_farsi_text_readable(f"Top Channels by View - {industry}")) # type: ignore
+                plt.xlabel("Total Views")
+                plt.tight_layout()
+                plt.savefig(f"3_top_channels_{industry}.png")
+                plt.close()
+
+        # 4. Word Cloud
+        if freq_report:
+            # WordCloud needs a specific font file path. 
+            # Adjust this path based on your OS (Windows/Linux/Mac)
+            font_path = "C:\\Windows\\Fonts\\tahoma.ttf" 
+            if not os.path.exists(font_path):
+                font_path = "arial.ttf" # Fallback
+
+            for industry, freqs in freq_report.items():
+                if not freqs: continue
+                
+                # Reshape keys for WordCloud
+                if HAS_RESHAPER:
+                    reshaped_freqs = {get_display(arabic_reshaper.reshape(k)): v for k, v in freqs.items()} # type: ignore
+                else:
+                    reshaped_freqs = freqs
+
+                wc = WordCloud(width=800, height=400, background_color='white', font_path=font_path)
+                wc.generate_from_frequencies(reshaped_freqs)
+                
+                plt.figure(figsize=(10, 5))
+                plt.imshow(wc, interpolation='bilinear')
+                plt.axis("off")
+                plt.title(make_farsi_text_readable(f"WordCloud in - {industry}")) # type: ignore
+                plt.savefig(f"4_wordcloud_{industry}.png")
+                plt.close()
+
+        # 5. Line Chart: Weekly Trend
+        plt.figure(figsize=(12, 6))
+        for industry in self.keywords.keys(): # type: ignore
+            col_name = f"is_{industry}"
+            if col_name in self.processed_data.columns:
+                df_ind = self.processed_data[self.processed_data[col_name] == True].copy()
+                if not df_ind.empty:
+                    weekly_counts = df_ind.resample('W', on='full_date').size()
+                    plt.plot(weekly_counts.index, weekly_counts.values, label=make_farsi_text_readable(industry))
+        
+        plt.title(make_farsi_text_readable("Weekly Trend of Relevant Posts")) # type: ignore
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        plt.tight_layout()
+        plt.savefig("5_time_trend.png")
+        plt.close()
+        print(">> All charts saved.")
 
         
 if __name__ == "__main__":
