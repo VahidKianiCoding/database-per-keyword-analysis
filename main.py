@@ -545,111 +545,62 @@ class TelegramIndustryAnalyzer:
     
     def plot_visualizations(self, stats_report, freq_report, keyword_breakdown):
         """
-        Generates and saves the requested plots using Matplotlib and Seaborn.
+        Generates high-quality, publication-ready visualizations using Seaborn.
         """
-        print(">> Generating 5 visualizations...")
-        sns.set_theme(style="whitegrid")
-        # Ensure a font that supports Arabic/Persian script is available on your OS
-        # 'Arial' usually supports it on Windows, otherwise install 'Vazir' or 'Tahoma'
-        plt.rcParams['font.family'] = 'Arial'
+        import matplotlib.font_manager as fm
+        import numpy as np
         
-        # 1. Bar Chart: Total Posts per Industry
-        if stats_report:
-            plt.figure(figsize=(10, 6))
-            counts = {make_farsi_text_readable(k): v['count'] for k, v in stats_report.items()}
-            sns.barplot(x=list(counts.keys()), y=list(counts.values()), palette="viridis")
-            plt.title(make_farsi_text_readable("Total Posts per Industry")) # type: ignore
-            plt.xticks(rotation=45)
-            plt.tight_layout()
-            plt.savefig("1_industry_counts.png")
-            plt.close()
+        print(">> Generating professional visualizations...")
+        
+        # 1. Setup Style & Font
+        sns.set_theme(style="whitegrid", context="talk") 
+        
+        # Path to the font file (Make sure to create 'assets' folder)
+        font_path = os.path.join("assets", "Vazirmatn-Regular.ttf")
+        if not os.path.exists(font_path):
+            font_path = "Vazirmatn-Regular.ttf" # Fallback
+            
+        try:
+            # Create FontProperties object for Matplotlib
+            persian_font = fm.FontProperties(fname=font_path)
+            print(f"   -> Using font: {os.path.basename(font_path)}")
+        except:
+            print("   -> Warning: Custom font not found. Persian text might be disjointed.")
+            persian_font = None
 
-        # 2. Bar Chart: Keyword Breakdown (Top 10 keywords per industry)
-        if keyword_breakdown:
-            for industry, keys_data in keyword_breakdown.items():
-                if not keys_data: continue
-                top_keys = dict(list(keys_data.items())[:10])
-                plt.figure(figsize=(12, 6))
-                labels = [make_farsi_text_readable(k) for k in top_keys.keys()]
-                sns.barplot(x=list(top_keys.values()), y=labels, palette="rocket")
-                plt.title(make_farsi_text_readable(f"Most-Used Keywords in {industry}")) # type: ignore
-                plt.xlabel("Count")
-                plt.tight_layout()
-                plt.savefig(f"2_keywords_{industry}.png")
-                plt.close()
+        # Helper to apply font to all chart elements
+        def apply_chart_style(ax, title, x_label, y_label):
+            ax.set_title(make_farsi_text_readable(title), fontproperties=persian_font, fontsize=20, pad=20)
+            ax.set_xlabel(make_farsi_text_readable(x_label), fontproperties=persian_font, fontsize=16)
+            ax.set_ylabel(make_farsi_text_readable(y_label), fontproperties=persian_font, fontsize=16)
+            
+            for label in ax.get_xticklabels():
+                label.set_fontproperties(persian_font)
+            for label in ax.get_yticklabels():
+                label.set_fontproperties(persian_font)
 
-        # 3. Word Frequencies (Cloud + Bar Chart)
-        if freq_report:
-            # Font config
-            font_path = "C:\\Windows\\Fonts\\tahoma.ttf" 
-            if not os.path.exists(font_path): font_path = "arial.ttf"
-
-            for group_name, freqs in freq_report.items():
-                if not freqs: continue
+        # Helper to add value labels on bars
+        def add_value_labels(ax, orient='h'):
+            for p in ax.patches:
+                if p.get_width() == 0 and p.get_height() == 0: continue
                 
-                # A. Word Cloud (Decorative)
-                if HAS_RESHAPER:
-                    reshaped_freqs = {get_display(arabic_reshaper.reshape(k)): v for k, v in freqs.items()} # type: ignore
+                if orient == 'h':
+                    value = int(p.get_width())
+                    x = p.get_width()
+                    y = p.get_y() + p.get_height() / 2
+                    ha = 'left'
+                    va = 'center'
+                    offset = (5, 0)
                 else:
-                    reshaped_freqs = freqs
+                    value = int(p.get_height())
+                    x = p.get_x() + p.get_width() / 2
+                    y = p.get_height()
+                    ha = 'center'
+                    va = 'bottom'
+                    offset = (0, 5)
                 
-                wc = WordCloud(width=800, height=400, background_color='white', font_path=font_path)
-                wc.generate_from_frequencies(reshaped_freqs)
-                plt.figure(figsize=(10, 5))
-                plt.imshow(wc, interpolation='bilinear')
-                plt.axis("off")
-                plt.title(make_farsi_text_readable(f"WordCloud in {group_name}")) # type: ignore
-                plt.savefig(f"4_wordcloud_{group_name}.png")
-                plt.close()
-                
-                # B. Bar Chart (Analytical) - NEW FEATURE
-                # Take top 15 words for the bar chart
-                top_words = dict(list(freqs.items())[:15])
-                plt.figure(figsize=(12, 8))
-                
-                words = [make_farsi_text_readable(k) for k in top_words.keys()]
-                counts = list(top_words.values())
-                
-                # Use a special color for Global analysis
-                palette = "magma" if group_name == 'Global_All_Industries' else "crest"
-                
-                sns.barplot(x=counts, y=words, palette=palette)
-                plt.title(make_farsi_text_readable(f"Most-Used Words in {group_name}")) # type: ignore
-                plt.xlabel("Frequency")
-                plt.tight_layout()
-                plt.savefig(f"4_barchart_freq_{group_name}.png")
-                plt.close()
-
-        # 4. Top Channels
-        if stats_report:
-            for industry, data in stats_report.items():
-                top_ch = data['top_channels']
-                if top_ch.empty: continue
-                plt.figure(figsize=(10, 6))
-                sns.barplot(x=top_ch.values, y=top_ch.index, palette="mako")
-                plt.title(make_farsi_text_readable(f"Top Channels by View in {industry}")) # type: ignore
-                plt.xlabel("Total Views")
-                plt.tight_layout()
-                plt.savefig(f"3_top_channels_{industry}.png")
-                plt.close()
-
-        # 5. Weekly Trend
-        plt.figure(figsize=(12, 6))
-        for industry in self.keywords.keys():
-            col_name = f"is_{industry}"
-            if col_name in self.processed_data.columns: # type: ignore
-                df_ind = self.processed_data[self.processed_data[col_name] == True].copy() # type: ignore
-                if not df_ind.empty:
-                    weekly_counts = df_ind.resample('W', on='full_date').size()
-                    plt.plot(weekly_counts.index, weekly_counts.values, label=make_farsi_text_readable(industry)) # type: ignore
-        
-        plt.title(make_farsi_text_readable("Weekly Trend of Relevant Posts")) # type: ignore
-        plt.legend()
-        plt.grid(True, alpha=0.3)
-        plt.tight_layout()
-        plt.savefig("5_time_trend.png")
-        plt.close()
-        print(">> All charts saved.")
+                ax.annotate(f'{value:,}', (x, y), xytext=offset, 
+                            textcoords='offset points', ha=ha, va=va, fontsize=12)
 
 
 def load_and_clean_data(file_path: str) -> pd.DataFrame:
