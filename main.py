@@ -134,7 +134,7 @@ class TelegramIndustryAnalyzer:
                 remove_specials_chars=True,
                 decrease_repeated_chars=True,
                 persian_style=True,
-                persian_numbers=False,
+                persian_numbers=False, 
                 unicodes_replacement=True,
                 seperate_mi=True
             )
@@ -146,36 +146,37 @@ class TelegramIndustryAnalyzer:
             self.tokenizer = word_tokenize
             self.lemmatizer = Lemmatizer()
             
-            # 4. Stopwords Setup (Enhanced)
+            # 4. Stopwords Setup (FINAL REFINED LIST)
             hazm_stops = stopwords_list()
             
-            # A. Time & Date Noise
+            # A. Time & Date
             time_stops = [
                 'سال', 'ماه', 'روز', 'هفته', 'ساعت', 'دقیقه', 'ثانیه', 'امروز', 'دیروز', 'فردا', 'امشب',
                 'شنبه', 'یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه',
                 'فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور', 
                 'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند',
-                'ژانویه', 'فوریه', 'مارس', 'آوریل', 'مه', 'ژوئن', 'ژوئیه', 'اوت', 'سپتامبر', 'اکتبر', 'نوامبر', 'دسامبر',
-                'میلادی', 'شمسی', 'قمری', 'گذشته', 'آینده', 'کنونی', 'جاری'
+                'گذشته', 'آینده', 'کنونی', 'جاری', 'مدت', 'زمان', 'تاریخ'
             ]
             
-            # B. URL & Web Noise
+            # B. Web & Social Media
             web_stops = [
-                'http', 'https', 'www', 'com', 'ir', 'org', 'net', 'html', 'htm', 'php', 
-                'link', 'join', 'channel', 'id', 'admin', 'bot', 'click', 'site', 'website',
-                'لینک', 'سایت', 'وبسایت', 'اینستاگرام', 'تلگرام', 'واتساپ', 'یوتیوب', 'توییتر',
-                'عضو', 'عضویت', 'کانال', 'گروه', 'پیج', 'ادمین', 'ایدی', 'آیدی'
+                'http', 'https', 'www', 'com', 'ir', 'org', 'net', 'link', 'join', 'channel', 
+                'id', 'admin', 'bot', 'click', 'site', 'website', 'instagram', 'telegram',
+                'لینک', 'سایت', 'وبسایت', 'اینستاگرام', 'تلگرام', 'واتساپ', 'یوتیوب', 'اپلیکیشن',
+                'عضو', 'عضویت', 'کانال', 'گروه', 'پیج', 'ادمین', 'ایدی', 'آیدی', 'پست', 'استوری'
             ]
             
-            # C. General Noise & Verbs
+            # C. Verbs & Abstract Nouns
             general_stops = [
                 'هزار', 'میلیون', 'میلیارد', 'تومان', 'ریال', 'دلار', 'درصد', 'عدد', 'شماره',
-                'گزارش', 'خبر', 'ادامه', 'تصویر', 'مطلب', 'صفحه', 'نسخه', 'منتشر', 'انتشار',
+                'گزارش', 'خبر', 'ادامه', 'تصویر', 'مطلب', 'صفحه', 'نسخه', 'منتشر', 'انتشار', 'منبع',
                 'افزایش', 'کاهش', 'نیز', 'باید', 'شدن', 'داد', 'کرد', 'کند', 'است', 'بود', 'شد', 'گفت', 'وی',
                 'این', 'آن', 'با', 'بر', 'برای', 'که', 'از', 'به', 'در', 'را', 'تا', 'چون', 'چه', 'اگر',
                 'هست', 'نیست', 'دارد', 'داشت', 'می', 'نمی', 'های', 'ها', 'تر', 'ترین', 'می‌شود', 'می‌باشد',
                 'نمی‌شود', 'خواهد', 'نخواهد', 'بوده', 'شده', 'میشود', 'میشوم', 'دارند', 'کنند', 'می‌کنند',
-                'بسیار', 'خیلی', 'تمام', 'همه', 'هیچ', 'برخی', 'بعضی', 'اغلب', 'شاید', 'حتما'
+                'توانست', 'توانسته', 'انجام', 'جهت', 'دریافت', 'ارسال', 'تماس', 'پاسخ', 'سوال', 'قرار',
+                'پایان', 'آغاز', 'شروع', 'مورد', 'بخش', 'حوزه', 'طی', 'طبق', 'برابر', 'سوی', 'ضمن',
+                'کشور', 'استان', 'شهر', 'تهران', 'ایران', 'منطقه', 'محل', 'مکان'
             ]
             
             self.stopwords = set(hazm_stops + time_stops + web_stops + general_stops)
@@ -183,12 +184,12 @@ class TelegramIndustryAnalyzer:
             # 5. POS Tagger
             try:
                 from hazm import POSTagger
-                print(">> NLP: Initializing POS Tagger (This may download the model ~20MB if not cached)...")
+                print(">> NLP: Initializing POS Tagger...")
                 self.tagger = POSTagger(repo_id="roshan-research/hazm-postagger", model_filename="pos_tagger.model") # type: ignore
-                print(">> NLP: POS Tagger loaded successfully (High Accuracy Mode).")
+                print(">> NLP: POS Tagger loaded successfully.")
             except Exception as tag_err:
                 self.tagger = None
-                print(f">> NLP: Warning - POS Tagger failed to load ({tag_err}). Fallback enabled.")
+                print(f">> NLP: Warning - POS Tagger failed ({tag_err}). Fallback enabled.")
                 
         except Exception as e:
             print(f"Error setting up Hazm: {e}")
@@ -369,23 +370,34 @@ class TelegramIndustryAnalyzer:
     
     def analyze_word_frequency(self, top_n=50):
         """
-        Performs advanced NLP analysis:
-        Pipeline: Normalize -> Informal -> Tokenize -> POS Tag -> Filter -> Lemmatize -> Stopwords
+        Performs advanced NLP analysis with Context Filtering (Sports/Spam removal).
         """
         print(">> Starting NLP analysis (Global & Per Industry)...")
         freq_report = {}
         
-        # --- 0. PRE-PROCESSING: Dynamic Stopwords from Data ---
-        # Add all channel usernames to stopwords (systematic approach)
-        if 'channel_username' in self.processed_data.columns: # type: ignore
-            # Get unique usernames, lowercase, remove empty
-            channel_names = self.processed_data['channel_username'].astype(str).str.lower().unique().tolist() # type: ignore
-            # Add plain names (e.g., 'tejaratnews')
-            self.stopwords.update(channel_names) # type: ignore
-            # Add names with @ (e.g., '@tejaratnews') - just in case tokenizer kept it
-            self.stopwords.update([f"@{name}" for name in channel_names]) # type: ignore
-            print(f"   -> Added {len(channel_names)} channel usernames to stopwords.")
+        # --- 0. PRE-PROCESSING: Blacklists ---
         
+        # A. Stopwords from Channel Names
+        if 'channel_username' in self.processed_data.columns: # type: ignore
+            channel_names = self.processed_data['channel_username'].astype(str).str.lower().unique().tolist() # type: ignore
+            self.stopwords.update(channel_names) # type: ignore
+            self.stopwords.update([f"@{name}" for name in channel_names]) # type: ignore
+        
+        # B. Context Blacklist (To remove entire posts if they are off-topic)
+        # If a post contains these words, we assume it's sports/spam, not industry news.
+        SPORTS_KEYWORDS = [
+            'فوتبال', 'لیگ برتر', 'جام حذفی', 'سرمربی', 'دروازه‌بان', 'هافبک', 'مهاجم', 
+            'پرسپولیس', 'استقلال', 'تراکتور', 'سپاهان', 'لیگ قهرمانان', 'فدراسیون فوتبال',
+            'ورزشگاه', 'المپیک', 'مدال', 'قهرمانی', 'سوت پایان', 'هواداران'
+        ]
+        
+        ADS_KEYWORDS = [
+            'مشاوره رایگان', 'فالور', 'ممبر', 'وی‌پی‌ان', 'فیلترشکن', 'کاشت مو', 'مهاجرت تضمینی',
+            'تور لحظه آخری', 'لاماری', 'اقامت' # Based on your debug file
+        ]
+        
+        full_blacklist_pattern = '|'.join(SPORTS_KEYWORDS + ADS_KEYWORDS)
+
         # --- Internal Processing Function ---
         def process_text_batch(texts_list):
             local_counter = Counter()
@@ -395,13 +407,6 @@ class TelegramIndustryAnalyzer:
                 
                 # 1. Normalization
                 normalized = self.normalizer.normalize(txt) # type: ignore
-                try:
-                    informal_res = self.informal_normalizer.normalize(normalized) # type: ignore
-                    if isinstance(informal_res, list):
-                        normalized = " ".join([sent[0] for sent in informal_res]) # type: ignore
-                    else:
-                        normalized = informal_res
-                except: pass 
                 
                 # 2. Tokenization
                 tokens = self.tokenizer(normalized) # type: ignore
@@ -412,14 +417,12 @@ class TelegramIndustryAnalyzer:
                     try:
                         tagged = self.tagger.tag(tokens)
                         for word, tag in tagged:
-                            # Strict Tag Filtering: Keep only Nouns (N), Adjectives (AJ)
-                            # Removing Adverbs (ADV) as they are often noise in this context (e.g., "today")
+                            # Keep Noun (N), Adjective (AJ)
                             if tag.startswith('N') or tag.startswith('AJ'):
                                 lemma = self.lemmatizer.lemmatize(word) # type: ignore
                                 if '#' in lemma: lemma = lemma.split('#')[0]
                                 valid_lemmas.append(lemma)
                     except:
-                        # Fallback
                         for word in tokens:
                             valid_lemmas.append(word)
                 else:
@@ -428,35 +431,24 @@ class TelegramIndustryAnalyzer:
                         if '#' in lemma: lemma = lemma.split('#')[0]
                         valid_lemmas.append(lemma)
 
-                # 4. FINAL FILTERING (The most important part for your request)
+                # 4. FINAL FILTERING
                 clean_tokens = []
                 for t in valid_lemmas:
                     t_lower = t.lower()
                     
-                    # A. Stopword Check (includes channel names now)
-                    if t_lower in self.stopwords: continue
+                    # A. Stopword & Length
+                    if t_lower in self.stopwords or len(t) < 3: continue
                     
-                    # B. Length Check
-                    if len(t) < 3: continue
-                    
-                    # C. Regex: Numbers & Mixed Numbers (e.g., "100", "20%", "405", "User1")
-                    # If the token contains ANY digit, we drop it.
-                    # This is aggressive but necessary for cleaning Telegram noise.
+                    # B. Numbers (Strict)
                     if re.search(r'\d', t): continue
                     
-                    # D. Regex: URL parts & Handles
-                    # Filter 'http', 'www', '.com', starts with @
-                    if (t_lower.startswith('http') or 
-                        t_lower.startswith('www') or 
-                        t_lower.startswith('@') or 
-                        '.com' in t_lower or 
-                        '.ir' in t_lower): 
-                        continue
-                        
-                    # E. English Garbage Check
-                    # If it's purely English and not a known keyword, it might be noise
-                    # (Optional: disable if you expect English keywords)
-                    # if re.match(r'^[a-zA-Z]+$', t): continue
+                    # C. Web/IDs
+                    if any(x in t_lower for x in ['http', 'www', '.com', '.ir', '@']): continue
+                    
+                    # D. Emojis & Symbols (The Regex Fix)
+                    # We keep only words containing Persian or English alphabets
+                    # This removes "👇", "!!!", ">>>" etc.
+                    if not re.match(r'^[آ-یa-zA-Z\u200c]+$', t): continue
 
                     clean_tokens.append(t)
                         
@@ -468,20 +460,34 @@ class TelegramIndustryAnalyzer:
             col_name = f"is_{industry}"
             if col_name not in self.processed_data.columns: continue # type: ignore
              
-            industry_df = self.processed_data[self.processed_data[col_name] == True] # type: ignore
+            industry_df = self.processed_data[self.processed_data[col_name] == True].copy() # type: ignore
             if industry_df.empty: continue
             
-            print(f"   -> Analyzing Industry: {industry}...")
+            # --- APPLY CONTEXT FILTER (Crucial Step) ---
+            # Remove rows containing sports/spam keywords
+            initial_count = len(industry_df)
+            mask_noise = industry_df['text'].str.contains(full_blacklist_pattern, regex=True, na=False)
+            industry_df = industry_df[~mask_noise]
+            
+            filtered_count = len(industry_df)
+            if initial_count - filtered_count > 0:
+                print(f"   -> {industry}: Filtered {initial_count - filtered_count} sports/ads posts.")
+            
+            print(f"   -> Analyzing Industry: {industry} ({filtered_count} posts)...")
             texts = industry_df['text'].dropna().astype(str).tolist()
             cnt = process_text_batch(texts)
             freq_report[industry] = dict(cnt.most_common(top_n))            
             
-        # 2. Global Analysis
+        # 2. Global Analysis (Apply same filter)
         print("   -> Analyzing Global (All Industries)...")
         industry_cols = [f"is_{k}" for k in self.keywords.keys() if f"is_{k}" in self.processed_data.columns] # type: ignore
         if industry_cols:
             global_mask = self.processed_data[industry_cols].any(axis=1) # type: ignore
-            global_df = self.processed_data[global_mask] # type: ignore
+            global_df = self.processed_data[global_mask].copy() # type: ignore
+            
+            # Filter Global too
+            mask_noise_global = global_df['text'].str.contains(full_blacklist_pattern, regex=True, na=False)
+            global_df = global_df[~mask_noise_global]
             
             if not global_df.empty:
                 global_texts = global_df['text'].dropna().astype(str).tolist()
