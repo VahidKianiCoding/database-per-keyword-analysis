@@ -91,8 +91,8 @@ class TelegramIndustryAnalyzer:
             keywords (dict): Dictionary of industry names and their associated keywords.
         """
         def __init__(self, DB_CONFIG, keywords):
-            self.keywords = keywords
-            self.processed_data = None   # Will hold the final DataFrame
+            self.keywords = keywords 
+            self.processed_data = None
             self.engine = None
         
         # Database setup - Only attempt if config is provided
