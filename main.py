@@ -49,7 +49,7 @@ INDUSTRY_KEYWORDS = {
     ],
     'Non_Ferrous_Metals': [
         'آلومینیوم', 'فلزات غیرآهنی', 'شمش آلومینیوم', 'کنسانتره مس', 'شمش مس',
-        'توسعه زنجیره مس', 'نیکل', 'سرب و روی', 'سهام ملی صنایع مس', 'سهام فملی', # روی -> سرب و روی
+        'توسعه زنجیره مس', 'نیکل', 'سرب و روی', 'سهام ملی صنایع مس', 'سهام فملی',
         'معدن مس سرچشمه', 'شمش روی', 'کاتد مس', 'قیمت جهانی مس'
     ],
     'Water_Industry': [
@@ -67,7 +67,10 @@ INDUSTRY_KEYWORDS = {
 }
 
 def make_farsi_text_readable(text):
-    """Reshapes Farsi text for Matplotlib if libraries are available."""
+    """
+    Helper to reshape Farsi text for Matplotlib so letters correspond correctly (RTL).
+    Requires arabic-reshaper and python-bidi.
+    """
     if HAS_RESHAPER:
         reshaped_text = arabic_reshaper.reshape(text)
         return get_display(reshaped_text)
@@ -87,25 +90,29 @@ class TelegramIndustryAnalyzer:
             db_config (dict): Database connection details.
             keywords (dict): Dictionary of industry names and their associated keywords.
         """
-        self.keywords = keywords
-        self.processed_data = None  # Will hold the final DataFrame
+        def __init__(self, DB_CONFIG, keywords):
+            self.keywords = keywords
+            self.processed_data = None   # Will hold the final DataFrame
+            self.engine = None
         
-        
+        # Database setup - Only attempt if config is provided
+        # This allows offline mode without errors if DB credentials are missing
         # URL encode the username and password to handle special characters like '@', ':', '/'
-        try:
-            safe_user = quote_plus(DB_CONFIG['DB_USER'])
-            safe_pass = quote_plus(DB_CONFIG['DB_PASS'])
-        
-            # Create SQLAlchemy engine for database connection
-            # Using mysql+pymysql connector (requires: pip install pymysql)
-            connection_str = (
-                f"mysql+pymysql://{safe_user}:{safe_pass}"
-                f"@{DB_CONFIG['DB_HOST']}:{DB_CONFIG['DB_PORT']}/{DB_CONFIG['DB_NAME']}"
-            )
-            self.engine = create_engine(connection_str)
-            print(">> Database engine initialized successfully.")
-        except KeyError as e:
-            raise KeyError(f"Missing database config key: {e}. Check your .env and DB_CONFIG.")
+        if DB_CONFIG.get('DB_HOST'):    
+            try:
+                safe_user = quote_plus(DB_CONFIG['DB_USER'])
+                safe_pass = quote_plus(DB_CONFIG['DB_PASS'])
+            
+                # Create SQLAlchemy engine for database connection
+                # Using mysql+pymysql connector (requires: pip install pymysql)
+                connection_str = (
+                    f"mysql+pymysql://{safe_user}:{safe_pass}"
+                    f"@{DB_CONFIG['DB_HOST']}:{DB_CONFIG['DB_PORT']}/{DB_CONFIG['DB_NAME']}"
+                )
+                self.engine = create_engine(connection_str)
+                print(">> Database engine initialized successfully.")
+            except Exception as e:
+                print(f"Warning: Database connection failed ({e}). Running in offline mode only.")
 
     
     def _get_regex_patterns(self):
