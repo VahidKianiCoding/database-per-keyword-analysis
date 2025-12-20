@@ -613,8 +613,8 @@ def load_and_clean_data(file_path: str) -> pd.DataFrame:
 if __name__ == "__main__":
     # --- Configuration ---
     CSV_FILENAME = "telegram_industry_data.csv"
-    FORCE_FETCH = False  # Set to True to ignore cache and fetch fresh data from DB
-    CSV_SEPARATOR = ','  # Note: The new loader assumes standard CSV format
+    FORCE_FETCH = False  
+    CSV_SEPARATOR = ',' 
     
     # Initialize Analyzer
     analyzer = TelegramIndustryAnalyzer(DB_CONFIG, INDUSTRY_KEYWORDS)
@@ -627,9 +627,8 @@ if __name__ == "__main__":
         if FORCE_FETCH or not os.path.exists(CSV_FILENAME):
             print(f">> Mode: ONLINE (Reason: FORCE_FETCH={FORCE_FETCH} or File Missing)")
             
-            # Calculate dynamic dates (Last n days)
+            # Calculate dynamic dates (Last 1 year for example)
             today = datetime.now()
-            # You can adjust this window as needed
             start_date = today - timedelta(days=365) 
             
             start_str = start_date.strftime('%Y-%m-%d')
@@ -650,8 +649,7 @@ if __name__ == "__main__":
         else:
             print(f">> Mode: OFFLINE (Loading {CSV_FILENAME})")
             
-            # HERE IS THE CHANGE: Use the robust loader function we created
-            # This replaces the complex try/except block for reading CSVs
+            # Robust Load using the new function
             analyzer.processed_data = load_and_clean_data(CSV_FILENAME)
             
             if analyzer.processed_data is not None and not analyzer.processed_data.empty:
@@ -664,7 +662,6 @@ if __name__ == "__main__":
         if data_loaded and analyzer.processed_data is not None and not analyzer.processed_data.empty:
             
             # Step 1: Categorize Posts
-            # Note: This method also ensures 'full_date' is datetime, which is safe to run again
             analyzer.categorize_posts()
             
             # Step 2: Generate Statistics
