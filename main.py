@@ -2,17 +2,17 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 from sqlalchemy import create_engine, text
-from hazm import word_tokenize, Normalizer, stopwords_list
+from hazm import word_tokenize, Normalizer, stopwords_list, Lemmatizer, InformalNormalizer
 from collections import Counter
 import re
 from datetime import datetime, timedelta
 import os
 import logging
-import io
 from tqdm import tqdm
 from urllib.parse import quote_plus
 from dotenv import load_dotenv
 from wordcloud import WordCloud
+import io
 
 # Libraries for correct Persian text rendering in plots
 try:
@@ -91,25 +91,28 @@ class TelegramIndustryAnalyzer:
     def __init__(self, DB_CONFIG, keywords):
         """
         Initialize the analyzer with database credentials and industry keywords.
-
-        Args:
-            db_config (dict): Database connection details.
-            keywords (dict): Dictionary of industry names and their associated keywords.
+        Also sets up NLP models lazily.
         """
         self.keywords = keywords 
         self.processed_data = None
         self.engine = None
         
-        # Database setup - Only attempt if config is provided
-        # This allows offline mode without errors if DB credentials are missing
-        # URL encode the username and password to handle special characters like '@', ':', '/'
+        # NLP Components (Lazy loaded)
+        self.normalizer = None
+        self.informal_normalizer = None
+        self.tokenizer = None
+        self.lemmatizer = None
+        self.tagger = None
+        self.stopwords = None
+        
+        # Initialize Hazm components
+        self._setup_hazm()
+        
+        # Database setup
         if DB_CONFIG.get('DB_HOST'):    
             try:
                 safe_user = quote_plus(DB_CONFIG['DB_USER'])
                 safe_pass = quote_plus(DB_CONFIG['DB_PASS'])
-            
-                # Create SQLAlchemy engine for database connection
-                # Using mysql+pymysql connector (requires: pip install pymysql)
                 connection_str = (
                     f"mysql+pymysql://{safe_user}:{safe_pass}"
                     f"@{DB_CONFIG['DB_HOST']}:{DB_CONFIG['DB_PORT']}/{DB_CONFIG['DB_NAME']}"
@@ -119,6 +122,56 @@ class TelegramIndustryAnalyzer:
             except Exception as e:
                 print(f"Warning: Database connection failed ({e}). Running in offline mode only.")
 
+    def _setup_hazm(self):
+        """
+        Configures Hazm models with optimized parameters for Telegram data.
+        """
+        try:
+            # 1. Normalizer with user-approved parameters
+            self.normalizer = Normalizer(
+                correct_spacing=True,
+                remove_diacritics=True,
+                remove_specials_chars=True,
+                decrease_repeated_chars=True,
+                persian_style=True,
+                persian_numbers=False, # Keep English digits for easier filtering
+                unicodes_replacement=True,
+                seperate_mi=True
+            )
+            
+            # 2. Informal Normalizer (Crucial for Telegram)
+            self.informal_normalizer = InformalNormalizer()
+            
+            # 3. Tokenizer & Lemmatizer
+            self.tokenizer = word_tokenize
+            self.lemmatizer = Lemmatizer()
+            
+            # 4. Stopwords Setup
+            hazm_stops = stopwords_list()
+            domain_stops = [
+                'هزار', 'میلیون', 'میلیارد', 'تومان', 'ریال', 'دلار', 'درصد', 'عدد', 'شماره',
+                'سال', 'ماه', 'روز', 'شنبه', 'یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه',
+                'گزارش', 'خبر', 'ادامه', 'تصویر', 'لینک', 'عضو', 'کانال', 'سلام', 'درود', 'جهت', 'مطلب',
+                'افزایش', 'کاهش', 'نیز', 'باید', 'شدن', 'داد', 'کرد', 'کند', 'است', 'بود', 'شد', 'گفت', 'وی',
+                'این', 'آن', 'با', 'بر', 'برای', 'که', 'از', 'به', 'در', 'را', 'تا', 'چون', 'چه', 'اگر',
+                'هست', 'نیست', 'دارد', 'داشت', 'می', 'نمی', 'های', 'ها', 'تر', 'ترین', 'می‌شود', 'می‌باشد',
+                'نمی‌شود', 'خواهد', 'نخواهد', 'بوده', 'شده', 'میشود', 'میشوم', 'دارند', 'کنند'
+            ]
+            self.stopwords = set(hazm_stops + domain_stops)
+            
+            # 5. POS Tagger (Try to load model)
+            # You usually need 'postagger.model' file in the directory
+            tagger_path = 'postagger.model' 
+            if os.path.exists(tagger_path):
+                from hazm import POSTagger
+                self.tagger = POSTagger(model=tagger_path)
+                print(">> NLP: POS Tagger loaded successfully (High Accuracy Mode).")
+            else:
+                self.tagger = None
+                print(">> NLP: 'postagger.model' not found. Falling back to simple Lemmatization.")
+                
+        except Exception as e:
+            print(f"Error setting up Hazm: {e}")
     
     def _get_regex_patterns(self):
         """
@@ -505,7 +558,6 @@ def load_and_clean_data(file_path: str) -> pd.DataFrame:
             
         # 2. SURGICAL FIX: Replace literal "\n" sequence with actual newline
         # The pattern in your file is: "views_value"\n"text_next_row"
-        # We replace the sequence [quote + backslash + n + quote] with [quote + newline + quote]
         fixed_content = raw_content.replace('"\\n"', '"\n"')
         
         # 3. Parse the fixed content from memory
@@ -543,10 +595,9 @@ def load_and_clean_data(file_path: str) -> pd.DataFrame:
     df['views'] = pd.to_numeric(df['views'], errors='coerce').fillna(0)
 
     final_count = len(df)
-    logger.info(f"Successfully repaird & loaded {final_count} records (dropped {initial_count - final_count}).")
+    logger.info(f"Successfully repaired & loaded {final_count} records (dropped {initial_count - final_count}).")
     
     return df
-
 
         
 if __name__ == "__main__":
