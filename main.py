@@ -542,13 +542,9 @@ if __name__ == "__main__":
     # --- Configuration ---
     CSV_FILENAME = "telegram_industry_data.csv"
     FORCE_FETCH = False  # Set to True to ignore cache and fetch fresh data from DB
-    CSV_SEPARATOR = ','  # Change to '|' if your export used pipes
-    
-    # Define column names manually because the CSV might miss headers
-    CSV_COLUMNS = ['text', 'full_date', 'channel_username', 'views']
+    CSV_SEPARATOR = ','  # Note: The new loader assumes standard CSV format
     
     # Initialize Analyzer
-    # Note: DB connection will be attempted only if needed inside fetch method or if we pass config here
     analyzer = TelegramIndustryAnalyzer(DB_CONFIG, INDUSTRY_KEYWORDS)
     
     try:
@@ -561,9 +557,10 @@ if __name__ == "__main__":
             
             # Calculate dynamic dates (Last n days)
             today = datetime.now()
-            one_year_ago = today - timedelta(days=30)
+            # You can adjust this window as needed
+            start_date = today - timedelta(days=365) 
             
-            start_str = one_year_ago.strftime('%Y-%m-%d')
+            start_str = start_date.strftime('%Y-%m-%d')
             end_str = today.strftime('%Y-%m-%d')
             
             # 1. Fetch
@@ -577,46 +574,25 @@ if __name__ == "__main__":
             else:
                 print("!! Warning: No data fetched from Database.")
                 
-        # Condition 2: Load from local cache
+        # Condition 2: Load from local cache (Offline Mode)
         else:
             print(f">> Mode: OFFLINE (Loading {CSV_FILENAME})")
             
-            # Try reading with header first (default behavior)
-            try:
-                # We read the first row to check if it looks like a header
-                first_line = pd.read_csv(CSV_FILENAME, nrows=1, sep=CSV_SEPARATOR)
-                if 'full_date' in first_line.columns:
-                    # File HAS headers
-                    analyzer.processed_data = load_and_clean_data('telegram_industry_data.csv')
-                else:
-                    # File does NOT have headers (DataGrip export without column names)
-                    print("   -> No header detected. Assigning column names manually...")
-                    analyzer.processed_data = pd.read_csv(
-                        CSV_FILENAME, 
-                        header=None, 
-                        names=CSV_COLUMNS, 
-                        parse_dates=['full_date'], 
-                        sep=CSV_SEPARATOR
-                    )
-            except Exception as read_err:
-                print(f"   -> Standard read failed. Trying robust mode... ({read_err})")
-                # Fallback: Force manual names and skip bad lines
-                analyzer.processed_data = pd.read_csv(
-                    CSV_FILENAME, 
-                    header=None, 
-                    names=CSV_COLUMNS, 
-                    parse_dates=['full_date'], 
-                    sep=CSV_SEPARATOR,
-                    on_bad_lines='skip'
-                )
-
-            data_loaded = True
-            print(f">> Loaded {len(analyzer.processed_data)} records from disk.")
+            # HERE IS THE CHANGE: Use the robust loader function we created
+            # This replaces the complex try/except block for reading CSVs
+            analyzer.processed_data = load_and_clean_data(CSV_FILENAME)
+            
+            if analyzer.processed_data is not None and not analyzer.processed_data.empty:
+                data_loaded = True
+                print(f">> Loaded {len(analyzer.processed_data)} records from disk.")
+            else:
+                print("!! Warning: Loaded file is empty or corrupted.")
 
         # --- ANALYSIS PIPELINE ---
         if data_loaded and analyzer.processed_data is not None and not analyzer.processed_data.empty:
             
             # Step 1: Categorize Posts
+            # Note: This method also ensures 'full_date' is datetime, which is safe to run again
             analyzer.categorize_posts()
             
             # Step 2: Generate Statistics
