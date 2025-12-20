@@ -616,7 +616,7 @@ class TelegramIndustryAnalyzer:
             
             # Fix X-axis labels
             labels = [make_farsi_text_readable(name) for name in df_chart['Industry']]
-            ax.set_xticklabels(labels, rotation=45)
+            ax.set_xticklabels(labels, rotation=45) # type: ignore
             
             apply_chart_style(ax, "تعداد کل پست‌ها به تفکیک صنعت", "صنعت", "تعداد پست")
             add_value_labels(ax, orient='v')
@@ -711,7 +711,7 @@ class TelegramIndustryAnalyzer:
                 reshaped_freqs = {}
                 if HAS_RESHAPER:
                     for k, v in freqs.items():
-                        reshaped_k = get_display(arabic_reshaper.reshape(k))
+                        reshaped_k = get_display(arabic_reshaper.reshape(k)) # type: ignore
                         reshaped_freqs[reshaped_k] = v
                 else:
                     reshaped_freqs = freqs
@@ -728,7 +728,7 @@ class TelegramIndustryAnalyzer:
                 plt.figure(figsize=(16, 9))
                 plt.imshow(wc, interpolation='bilinear')
                 plt.axis("off")
-                plt.title(make_farsi_text_readable(f"ابر کلمات: {group_name}"), 
+                plt.title(make_farsi_text_readable(f"ابر کلمات: {group_name}"), # type: ignore
                           fontproperties=persian_font, fontsize=24, pad=20)
                 
                 plt.savefig(f"4_wordcloud_{group_name}.png", dpi=300)
@@ -743,8 +743,8 @@ class TelegramIndustryAnalyzer:
         has_data = False
         for industry in self.keywords.keys():
             col_name = f"is_{industry}"
-            if col_name in self.processed_data.columns:
-                df_ind = self.processed_data[self.processed_data[col_name] == True].copy()
+            if col_name in self.processed_data.columns: # type: ignore
+                df_ind = self.processed_data[self.processed_data[col_name] == True].copy() # type: ignore
                 if not df_ind.empty:
                     weekly_counts = df_ind.resample('W', on='full_date').size()
                     label_text = make_farsi_text_readable(industry)
