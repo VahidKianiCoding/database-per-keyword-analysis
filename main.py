@@ -168,25 +168,27 @@ class TelegramIndustryAnalyzer:
                 AND text IS NOT NULL
             """)
             
-            # Fetch data using pandas read_sql
-            # params prevents SQL injection and handles date formatting
-            df_batch = pd.read_sql(query, self.engine, params={"start": current_date, "end": query_end})
+            try:
+                if self.engine:    
+                    # Fetch data using pandas read_sql
+                    # params prevents SQL injection and handles date formatting
+                    df_batch = pd.read_sql(query, self.engine, params={"start": current_date, "end": query_end})
             
-            if not df_batch.empty:
-                # Filter logic: Check if text contains ANY keyword from ANY industry
-                # We combine all industry patterns into one huge regex for the first pass filter
-                # This drastically reduces rows before detailed categorization
-                full_pattern = '|'.join(patterns.values())
-                mask = df_batch['text'].str.contains(full_pattern, regex=True, na=False)
+                    if not df_batch.empty:
+                        # Filter logic: Check if text contains ANY keyword from ANY industry
+                        # We combine all industry patterns into one huge regex for the first pass filter
+                        # This drastically reduces rows before detailed categorization
+                        full_pattern = '|'.join(patterns.values())
+                        mask = df_batch['text'].str.contains(full_pattern, regex=True, na=False)
+                        relevant_batch = df_batch[mask].copy()
                 
-                relevant_batch = df_batch[mask].copy()
-                
-                # If we found relevant posts, append them to our list
-                if not relevant_batch.empty:
-                    all_relevant_posts.append(relevant_batch)
-                    print(f"   -> Found {len(relevant_batch)} relevant posts in this batch.")
-                else:
-                    print("   -> No relevant posts found in this batch.")
+                        # If we found relevant posts, append them to our list
+                        if not relevant_batch.empty:
+                            all_relevant_posts.append(relevant_batch)
+                            print(f"   -> Found {len(relevant_batch)} relevant posts in this batch.")
+            
+            except Exception as e:
+                print(f"   Error in batch: {e}")
             
             # Move to next month
             current_date = next_month
@@ -197,7 +199,6 @@ class TelegramIndustryAnalyzer:
             print(f">> Total relevant posts fetched: {len(self.processed_data)}")
         else:
             self.processed_data = pd.DataFrame()
-            print(">> No relevant posts found in the entire period.")
             
             
     def categorize_posts(self):
