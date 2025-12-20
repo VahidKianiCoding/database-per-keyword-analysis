@@ -288,11 +288,14 @@ class TelegramIndustryAnalyzer:
         return report
     
     
-    def analyze_word_frequency(self, top_n=100):
+    def analyze_word_frequency(self, top_n=50):
         """
-        Performs NLP analysis using 'hazm' library for normalization and stopword removal.
+        Performs NLP analysis:
+        1. Per Industry
+        2. Global (All relevant posts combined)
+        Returns a dictionary containing frequency lists for both.
         """
-        print(">> Starting NLP analysis...")
+        print(">> Starting NLP analysis (Global & Per Industry)...")
         
         # Initialize Hazm Normalizer
         normalizer = Normalizer()
@@ -303,45 +306,64 @@ class TelegramIndustryAnalyzer:
         # 2. Add domain-specific stopwords (optional but recommended for clean charts)
         # These are noise words often found in news/telegram but not grammatical stopwords
         domain_stops = [
-            'هزار', 'میلیون', 'میلیارد', 'تومان', 'ریال', 'دلار', 'درصد',
+            'هزار', 'میلیون', 'میلیارد', 'تومان', 'ریال', 'دلار', 'درصد', 'عدد', 'شماره',
             'سال', 'ماه', 'روز', 'شنبه', 'یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه',
-            'گزارش', 'خبر', 'ادامه', 'تصویر', 'لینک', 'عضو', 'کانال', 'سلام', 'درود', 'جهت',
-            'افزایش', 'کاهش', 'نیز', 'باید', 'شدن', 'داد', 'کرد', 'کند', 'است', 'بود', 'شد', 'گفت', 'وی'
+            'گزارش', 'خبر', 'ادامه', 'تصویر', 'لینک', 'عضو', 'کانال', 'سلام', 'درود', 'جهت', 'مطلب',
+            'افزایش', 'کاهش', 'نیز', 'باید', 'شدن', 'داد', 'کرد', 'کند', 'است', 'بود', 'شد', 'گفت', 'وی',
+            'این', 'آن', 'با', 'بر', 'برای', 'که', 'از', 'به', 'در', 'را', 'تا', 'چون', 'چه', 'اگر',
+            'هست', 'نیست', 'دارد', 'داشت', 'می', 'نمی', 'های', 'ها', 'تر', 'ترین', 'می‌شود', 'می‌باشد'
         ]
         
         # Combine both sets
         all_stops = set(hazm_stops + domain_stops)
         
         freq_report = {}
+        
+        # --- Helper Function for Tokenization ---
+        def get_tokens_counter(texts_list):
+            local_counter = Counter()
+            for txt in tqdm(texts_list, leave=False):
+                normalized = normalizer.normalize(txt)
+                tokens = normalized.split() # Fast split
+                clean_tokens = [
+                    t for t in tokens 
+                    if t not in all_stops 
+                    and len(t) > 2 
+                    and not t.isnumeric()
+                ]
+                local_counter.update(clean_tokens)
+            return local_counter
 
+        # 1. Per Industry Analysis
         for industry in self.keywords.keys(): # type: ignore
             col_name = f"is_{industry}"
             # Check if dataframe exists and has the column
             if col_name not in self.processed_data.columns: continue # type: ignore
+            
             industry_df = self.processed_data[self.processed_data[col_name] == True] # type: ignore
             if industry_df.empty: continue
             
-            industry_counter = Counter()
+            print(f"   -> Analyzing Industry: {industry}...")
             texts = industry_df['text'].dropna().astype(str).tolist()
+            cnt = get_tokens_counter(texts)
+            freq_report[industry] = dict(cnt.most_common(top_n))            
             
-            for text in tqdm(texts, desc=f"NLP: {industry}", leave=False):
-                # Normalize
-                normalized = normalizer.normalize(text)
-                # Tokenize (using simple split for speed, or word_tokenize for precision)
-                # Using simple split is MUCH faster for large datasets and usually enough for word clouds
-                # If you want high precision, use: tokens = word_tokenize(normalized)
-                tokens = normalized.split()
-                
-                clean_tokens = [
-                    t for t in tokens
-                    if t not in all_stops
-                    and len(t) > 2
-                    and not t.isnumeric()
-                ]
-                industry_counter.update(clean_tokens)
+            # 2. Global Analysis (All Industries Combined)
+            print("   -> Analyzing Global (All Industries)...")
             
-            freq_report[industry] = dict(industry_counter.most_common(top_n))
+            # Filter rows where AT LEAST one industry flag is True
+            industry_cols = [f"is_{k}" for k in self.keywords.keys() if f"is_{k}" in self.processed_data.columns] # type: ignore
+            if industry_cols:
+                # Create a mask for rows that belong to at least one industry
+                global_mask = self.processed_data[industry_cols].any(axis=1) # type: ignore
+                global_df = self.processed_data[global_mask] # type: ignore
             
+                if not global_df.empty:
+                    global_texts = global_df['text'].dropna().astype(str).tolist()
+                    global_cnt = get_tokens_counter(global_texts)
+                    freq_report['Global_All_Industries'] = dict(global_cnt.most_common(top_n))
+            
+        print(">> NLP analysis complete.")
         return freq_report
     
     
