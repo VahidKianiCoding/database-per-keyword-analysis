@@ -764,7 +764,57 @@ class TelegramIndustryAnalyzer:
             plt.savefig("5_time_trend.png", dpi=300)
             plt.close()
             
-        print(">> All high-quality charts saved successfully.")
+        # ---------------------------------------------------------
+        # 6. Bar Chart: Top Channels by Activity (Post Count) - Global & Industry
+        # ---------------------------------------------------------
+        # Prepare list of categories: Industries + Global
+        categories_to_plot = list(self.keywords.keys()) + ['Global']
+        
+        for category in categories_to_plot:
+            if category == 'Global':
+                # Logic for Global: Posts that match ANY industry
+                industry_cols = [f"is_{k}" for k in self.keywords.keys() if f"is_{k}" in self.processed_data.columns] # type: ignore
+                if not industry_cols: continue
+                mask = self.processed_data[industry_cols].any(axis=1) # type: ignore
+                df_target = self.processed_data[mask] # type: ignore
+                title_suffix = "در کل صنایع (Global)"
+                color_palette = "viridis"
+            else:
+                # Logic for specific Industry
+                col_name = f"is_{category}"
+                if col_name not in self.processed_data.columns: continue # type: ignore
+                df_target = self.processed_data[self.processed_data[col_name] == True] # type: ignore
+                title_suffix = f"در صنعت {category}"
+                color_palette = "flare"
+
+            if df_target.empty: continue
+
+            # Count posts per channel
+            top_active_channels = df_target['channel_username'].value_counts().head(15)
+            
+            df_active = pd.DataFrame({
+                'Channel': top_active_channels.index,
+                'PostCount': top_active_channels.values
+            })
+            
+            # Plot
+            fig_h = max(6, len(df_active) * 0.5 + 2)
+            plt.figure(figsize=(10, fig_h))
+            
+            ax = sns.barplot(data=df_active, x='PostCount', y='Channel', palette=color_palette)
+            
+            # Styling
+            chart_title = f"فعال‌ترین کانال‌ها (تعداد پست مرتبط) {title_suffix}"
+            apply_chart_style(ax, chart_title, "تعداد پست", "نام کانال")
+            add_value_labels(ax, orient='h')
+            
+            plt.tight_layout()
+            # File name handling
+            safe_cat = "Global" if category == 'Global' else category
+            plt.savefig(f"6_top_active_channels_{safe_cat}.png", dpi=300)
+            plt.close()
+
+        print(">> New chart (Activity Volume) saved successfully.")
 
 
 def load_and_clean_data(file_path: str) -> pd.DataFrame:
