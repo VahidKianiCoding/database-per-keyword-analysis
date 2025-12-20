@@ -349,63 +349,76 @@ class TelegramIndustryAnalyzer:
     
     def analyze_word_frequency(self, top_n=50):
         """
-        Performs NLP analysis:
-        1. Per Industry
-        2. Global (All relevant posts combined)
-        Returns a dictionary containing frequency lists for both.
+        Performs advanced NLP analysis:
+        Pipeline: Normalize -> Informal -> Tokenize -> POS Tag -> Filter -> Lemmatize -> Stopwords
         """
         print(">> Starting NLP analysis (Global & Per Industry)...")
-        
-        # Initialize Hazm Normalizer
-        normalizer = Normalizer(
-            True, # correct_spacing
-            True, # remove_diacritics
-            True, # remove_specials_chars
-            True, # decrease_repeated_chars
-            True, # persian_style
-            True, # persian_numbers
-            True, # unicodes_replacement
-            True, # seperate_mi
-            )
-        
-        # 1. Get standard Persian stopwords from Hazm
-        hazm_stops = stopwords_list()
-        
-        # 2. Add domain-specific stopwords (optional but recommended for clean charts)
-        # These are noise words often found in news/telegram but not grammatical stopwords
-        domain_stops = [
-            'هزار', 'میلیون', 'میلیارد', 'تومان', 'ریال', 'دلار', 'درصد', 'عدد', 'شماره',
-            'سال', 'ماه', 'روز', 'شنبه', 'یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه',
-            'گزارش', 'خبر', 'ادامه', 'تصویر', 'لینک', 'عضو', 'کانال', 'سلام', 'درود', 'جهت', 'مطلب',
-            'افزایش', 'کاهش', 'نیز', 'باید', 'شدن', 'داد', 'کرد', 'کند', 'است', 'بود', 'شد', 'گفت', 'وی',
-            'این', 'آن', 'با', 'بر', 'برای', 'که', 'از', 'به', 'در', 'را', 'تا', 'چون', 'چه', 'اگر',
-            'هست', 'نیست', 'دارد', 'داشت', 'می', 'نمی', 'های', 'ها', 'تر', 'ترین', 'می‌شود', 'می‌باشد'
-        ]
-        
-        # Combine both sets
-        all_stops = set(hazm_stops + domain_stops)
-        
         freq_report = {}
         
-        # --- Helper Function for Tokenization ---
-        def get_tokens_counter(texts_list):
+        # --- Internal Processing Function ---
+        def process_text_batch(texts_list):
             local_counter = Counter()
-            for txt in tqdm(texts_list, leave=False):
-                normalized = normalizer.normalize(txt)
-                tokens = normalized.split() # Fast split
-                clean_tokens = [
-                    t for t in tokens 
-                    if t not in all_stops 
-                    and len(t) > 2 
-                    and not t.isnumeric()
-                ]
+            
+            for txt in tqdm(texts_list, leave=False, desc="NLP Processing"):
+                if not isinstance(txt, str): continue
+                
+                # 1. Basic Normalization
+                normalized = self.normalizer.normalize(txt) # type: ignore
+                
+                # 2. Informal Normalization (Handles "میخوام" -> "می‌خواهم")
+                try:
+                    informal_res = self.informal_normalizer.normalize(normalized) # type: ignore
+                    # If it's a list (sentences), join them; if string, keep it
+                    if isinstance(informal_res, list):
+                        normalized = " ".join([sent[0] for sent in informal_res]) # type: ignore
+                    else:
+                        normalized = informal_res
+                except:
+                    pass 
+                
+                # 3. Tokenization
+                tokens = self.tokenizer(normalized) # type: ignore
+                valid_lemmas = []
+                
+                # 4. Strategy Selection: POS Tagging vs Simple
+                if self.tagger:
+                    # --- STRATEGY A: High Accuracy with POS Tagging ---
+                    try:
+                        tagged = self.tagger.tag(tokens)
+                        for word, tag in tagged:
+                            # Keep: Noun (N), Adjective (AJ), Adverb (ADV)
+                            # Discard: Verb (V), Preposition (P), Conjunction (CONJ), etc.
+                            if tag.startswith('N') or tag.startswith('AJ') or tag == 'ADV':
+                                lemma = self.lemmatizer.lemmatize(word) # type: ignore
+                                if '#' in lemma: lemma = lemma.split('#')[0]
+                                valid_lemmas.append(lemma)
+                    except:
+                        # Fallback if tagging fails on specific text
+                        for word in tokens:
+                            valid_lemmas.append(word)
+                else:
+                    # --- STRATEGY B: Fallback (Simple Lemmatization) ---
+                    for word in tokens:
+                        lemma = self.lemmatizer.lemmatize(word) # type: ignore
+                        if '#' in lemma: lemma = lemma.split('#')[0]
+                        valid_lemmas.append(lemma)
+
+                # 5. Final Cleaning & Stopword Removal
+                clean_tokens = []
+                for t in valid_lemmas:
+                    if (t not in self.stopwords 
+                        and len(t) > 2 
+                        and not t.isnumeric() 
+                        and not re.match(r'^[0-9]+$', t)
+                       ):
+                        clean_tokens.append(t)
+                        
                 local_counter.update(clean_tokens)
             return local_counter
 
         # 1. Per Industry Analysis
-        for industry in self.keywords.keys(): # type: ignore
+        for industry in self.keywords.keys():
             col_name = f"is_{industry}"
-            # Check if dataframe exists and has the column
             if col_name not in self.processed_data.columns: continue # type: ignore
              
             industry_df = self.processed_data[self.processed_data[col_name] == True] # type: ignore
@@ -413,23 +426,20 @@ class TelegramIndustryAnalyzer:
             
             print(f"   -> Analyzing Industry: {industry}...")
             texts = industry_df['text'].dropna().astype(str).tolist()
-            cnt = get_tokens_counter(texts)
+            cnt = process_text_batch(texts)
             freq_report[industry] = dict(cnt.most_common(top_n))            
             
-            # 2. Global Analysis (All Industries Combined)
-            print("   -> Analyzing Global (All Industries)...")
+        # 2. Global Analysis
+        print("   -> Analyzing Global (All Industries)...")
+        industry_cols = [f"is_{k}" for k in self.keywords.keys() if f"is_{k}" in self.processed_data.columns] # type: ignore
+        if industry_cols:
+            global_mask = self.processed_data[industry_cols].any(axis=1) # type: ignore
+            global_df = self.processed_data[global_mask] # type: ignore
             
-            # Filter rows where AT LEAST one industry flag is True
-            industry_cols = [f"is_{k}" for k in self.keywords.keys() if f"is_{k}" in self.processed_data.columns] # type: ignore
-            if industry_cols:
-                # Create a mask for rows that belong to at least one industry
-                global_mask = self.processed_data[industry_cols].any(axis=1) # type: ignore
-                global_df = self.processed_data[global_mask] # type: ignore
-            
-                if not global_df.empty:
-                    global_texts = global_df['text'].dropna().astype(str).tolist()
-                    global_cnt = get_tokens_counter(global_texts)
-                    freq_report['Global_All_Industries'] = dict(global_cnt.most_common(top_n))
+            if not global_df.empty:
+                global_texts = global_df['text'].dropna().astype(str).tolist()
+                global_cnt = process_text_batch(global_texts)
+                freq_report['Global_All_Industries'] = dict(global_cnt.most_common(top_n))
             
         print(">> NLP analysis complete.")
         return freq_report
