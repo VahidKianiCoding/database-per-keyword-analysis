@@ -375,6 +375,17 @@ class TelegramIndustryAnalyzer:
         print(">> Starting NLP analysis (Global & Per Industry)...")
         freq_report = {}
         
+        # --- 0. PRE-PROCESSING: Dynamic Stopwords from Data ---
+        # Add all channel usernames to stopwords (systematic approach)
+        if 'channel_username' in self.processed_data.columns: # type: ignore
+            # Get unique usernames, lowercase, remove empty
+            channel_names = self.processed_data['channel_username'].astype(str).str.lower().unique().tolist() # type: ignore
+            # Add plain names (e.g., 'tejaratnews')
+            self.stopwords.update(channel_names) # type: ignore
+            # Add names with @ (e.g., '@tejaratnews') - just in case tokenizer kept it
+            self.stopwords.update([f"@{name}" for name in channel_names]) # type: ignore
+            print(f"   -> Added {len(channel_names)} channel usernames to stopwords.")
+        
         # --- Internal Processing Function ---
         def process_text_batch(texts_list):
             local_counter = Counter()
@@ -382,56 +393,72 @@ class TelegramIndustryAnalyzer:
             for txt in tqdm(texts_list, leave=False, desc="NLP Processing"):
                 if not isinstance(txt, str): continue
                 
-                # 1. Basic Normalization
+                # 1. Normalization
                 normalized = self.normalizer.normalize(txt) # type: ignore
-                
-                # 2. Informal Normalization (Handles "میخوام" -> "می‌خواهم")
                 try:
                     informal_res = self.informal_normalizer.normalize(normalized) # type: ignore
-                    # If it's a list (sentences), join them; if string, keep it
                     if isinstance(informal_res, list):
                         normalized = " ".join([sent[0] for sent in informal_res]) # type: ignore
                     else:
                         normalized = informal_res
-                except:
-                    pass 
+                except: pass 
                 
-                # 3. Tokenization
+                # 2. Tokenization
                 tokens = self.tokenizer(normalized) # type: ignore
                 valid_lemmas = []
                 
-                # 4. Strategy Selection: POS Tagging vs Simple
+                # 3. Tagging & Lemmatization
                 if self.tagger:
-                    # --- STRATEGY A: High Accuracy with POS Tagging ---
                     try:
                         tagged = self.tagger.tag(tokens)
                         for word, tag in tagged:
-                            # Keep: Noun (N), Adjective (AJ), Adverb (ADV)
-                            # Discard: Verb (V), Preposition (P), Conjunction (CONJ), etc.
-                            if tag.startswith('N') or tag.startswith('AJ') or tag == 'ADV':
+                            # Strict Tag Filtering: Keep only Nouns (N), Adjectives (AJ)
+                            # Removing Adverbs (ADV) as they are often noise in this context (e.g., "today")
+                            if tag.startswith('N') or tag.startswith('AJ'):
                                 lemma = self.lemmatizer.lemmatize(word) # type: ignore
                                 if '#' in lemma: lemma = lemma.split('#')[0]
                                 valid_lemmas.append(lemma)
                     except:
-                        # Fallback if tagging fails on specific text
+                        # Fallback
                         for word in tokens:
                             valid_lemmas.append(word)
                 else:
-                    # --- STRATEGY B: Fallback (Simple Lemmatization) ---
                     for word in tokens:
                         lemma = self.lemmatizer.lemmatize(word) # type: ignore
                         if '#' in lemma: lemma = lemma.split('#')[0]
                         valid_lemmas.append(lemma)
 
-                # 5. Final Cleaning & Stopword Removal
+                # 4. FINAL FILTERING (The most important part for your request)
                 clean_tokens = []
                 for t in valid_lemmas:
-                    if (t not in self.stopwords 
-                        and len(t) > 2 
-                        and not t.isnumeric() 
-                        and not re.match(r'^[0-9]+$', t)
-                       ):
-                        clean_tokens.append(t)
+                    t_lower = t.lower()
+                    
+                    # A. Stopword Check (includes channel names now)
+                    if t_lower in self.stopwords: continue
+                    
+                    # B. Length Check
+                    if len(t) < 3: continue
+                    
+                    # C. Regex: Numbers & Mixed Numbers (e.g., "100", "20%", "405", "User1")
+                    # If the token contains ANY digit, we drop it.
+                    # This is aggressive but necessary for cleaning Telegram noise.
+                    if re.search(r'\d', t): continue
+                    
+                    # D. Regex: URL parts & Handles
+                    # Filter 'http', 'www', '.com', starts with @
+                    if (t_lower.startswith('http') or 
+                        t_lower.startswith('www') or 
+                        t_lower.startswith('@') or 
+                        '.com' in t_lower or 
+                        '.ir' in t_lower): 
+                        continue
+                        
+                    # E. English Garbage Check
+                    # If it's purely English and not a known keyword, it might be noise
+                    # (Optional: disable if you expect English keywords)
+                    # if re.match(r'^[a-zA-Z]+$', t): continue
+
+                    clean_tokens.append(t)
                         
                 local_counter.update(clean_tokens)
             return local_counter
