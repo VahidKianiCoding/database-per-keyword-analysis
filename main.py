@@ -393,7 +393,6 @@ class TelegramIndustryAnalyzer:
             for industry, keys_data in keyword_breakdown.items():
                 if not keys_data: continue
                 top_keys = dict(list(keys_data.items())[:10])
-                
                 plt.figure(figsize=(12, 6))
                 labels = [make_farsi_text_readable(k) for k in top_keys.keys()]
                 sns.barplot(x=list(top_keys.values()), y=labels, palette="rocket")
@@ -403,50 +402,64 @@ class TelegramIndustryAnalyzer:
                 plt.savefig(f"2_keywords_{industry}.png")
                 plt.close()
 
-        # 3. Bar Chart: Top Channels by Views
+        # 3. Word Frequencies (Cloud + Bar Chart)
+        if freq_report:
+            # Font config
+            font_path = "C:\\Windows\\Fonts\\tahoma.ttf" 
+            if not os.path.exists(font_path): font_path = "arial.ttf"
+
+            for group_name, freqs in freq_report.items():
+                if not freqs: continue
+                
+                # A. Word Cloud (Decorative)
+                if HAS_RESHAPER:
+                    reshaped_freqs = {get_display(arabic_reshaper.reshape(k)): v for k, v in freqs.items()} # type: ignore
+                else:
+                    reshaped_freqs = freqs
+                
+                wc = WordCloud(width=800, height=400, background_color='white', font_path=font_path)
+                wc.generate_from_frequencies(reshaped_freqs)
+                plt.figure(figsize=(10, 5))
+                plt.imshow(wc, interpolation='bilinear')
+                plt.axis("off")
+                plt.title(make_farsi_text_readable(f"WordCloud in {group_name}")) # type: ignore
+                plt.savefig(f"4_wordcloud_{group_name}.png")
+                plt.close()
+                
+                # B. Bar Chart (Analytical) - NEW FEATURE
+                # Take top 15 words for the bar chart
+                top_words = dict(list(freqs.items())[:15])
+                plt.figure(figsize=(12, 8))
+                
+                words = [make_farsi_text_readable(k) for k in top_words.keys()]
+                counts = list(top_words.values())
+                
+                # Use a special color for Global analysis
+                palette = "magma" if group_name == 'Global_All_Industries' else "crest"
+                
+                sns.barplot(x=counts, y=words, palette=palette)
+                plt.title(make_farsi_text_readable(f"Most-Used Words in {group_name}")) # type: ignore
+                plt.xlabel("Frequency")
+                plt.tight_layout()
+                plt.savefig(f"4_barchart_freq_{group_name}.png")
+                plt.close()
+
+        # 4. Top Channels
         if stats_report:
             for industry, data in stats_report.items():
                 top_ch = data['top_channels']
                 if top_ch.empty: continue
-                
                 plt.figure(figsize=(10, 6))
                 sns.barplot(x=top_ch.values, y=top_ch.index, palette="mako")
-                plt.title(make_farsi_text_readable(f"Top Channels by View - {industry}")) # type: ignore
+                plt.title(make_farsi_text_readable(f"Top Channels by View in {industry}")) # type: ignore
                 plt.xlabel("Total Views")
                 plt.tight_layout()
                 plt.savefig(f"3_top_channels_{industry}.png")
                 plt.close()
 
-        # 4. Word Cloud
-        if freq_report:
-            # WordCloud needs a specific font file path. 
-            # Adjust this path based on your OS (Windows/Linux/Mac)
-            font_path = "C:\\Windows\\Fonts\\tahoma.ttf" 
-            if not os.path.exists(font_path):
-                font_path = "arial.ttf" # Fallback
-
-            for industry, freqs in freq_report.items():
-                if not freqs: continue
-                
-                # Reshape keys for WordCloud
-                if HAS_RESHAPER:
-                    reshaped_freqs = {get_display(arabic_reshaper.reshape(k)): v for k, v in freqs.items()} # type: ignore
-                else:
-                    reshaped_freqs = freqs
-
-                wc = WordCloud(width=800, height=400, background_color='white', font_path=font_path)
-                wc.generate_from_frequencies(reshaped_freqs)
-                
-                plt.figure(figsize=(10, 5))
-                plt.imshow(wc, interpolation='bilinear')
-                plt.axis("off")
-                plt.title(make_farsi_text_readable(f"WordCloud in - {industry}")) # type: ignore
-                plt.savefig(f"4_wordcloud_{industry}.png")
-                plt.close()
-
-        # 5. Line Chart: Weekly Trend
+        # 5. Weekly Trend
         plt.figure(figsize=(12, 6))
-        for industry in self.keywords.keys(): # type: ignore
+        for industry in self.keywords.keys():
             col_name = f"is_{industry}"
             if col_name in self.processed_data.columns: # type: ignore
                 df_ind = self.processed_data[self.processed_data[col_name] == True].copy() # type: ignore
