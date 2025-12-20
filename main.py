@@ -90,10 +90,9 @@ class TelegramIndustryAnalyzer:
             db_config (dict): Database connection details.
             keywords (dict): Dictionary of industry names and their associated keywords.
         """
-        def __init__(self, DB_CONFIG, keywords):
-            self.keywords = keywords 
-            self.processed_data = None
-            self.engine = None
+        self.keywords = keywords 
+        self.processed_data = None
+        self.engine = None
         
         # Database setup - Only attempt if config is provided
         # This allows offline mode without errors if DB credentials are missing
