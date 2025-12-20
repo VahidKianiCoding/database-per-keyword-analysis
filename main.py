@@ -8,6 +8,7 @@ import re
 from datetime import datetime, timedelta
 import os
 import logging
+import io
 from tqdm import tqdm
 from urllib.parse import quote_plus
 from dotenv import load_dotenv
@@ -492,66 +493,57 @@ class TelegramIndustryAnalyzer:
 
 def load_and_clean_data(file_path: str) -> pd.DataFrame:
     """
-    Robustly loads the CSV file using a 'force headers' strategy.
-    It treats the file as having NO headers initially, assigns names manually,
-    and then filters out the header row if it exists inside the data.
+    Robustly loads a malformed CSV where record separators are literal '\\n' strings
+    instead of actual newlines.
     """
+    logger.info(f"Loading and repairing raw file: {file_path}")
+    
     try:
-        # Attempt to read with python engine, skipping bad lines
-        # header=None: We tell pandas NOT to look for a header row. We will assign it manually.
+        # 1. Read the entire file as a raw string
+        with open(file_path, 'r', encoding='utf-8') as f:
+            raw_content = f.read()
+            
+        # 2. SURGICAL FIX: Replace literal "\n" sequence with actual newline
+        # The pattern in your file is: "views_value"\n"text_next_row"
+        # We replace the sequence [quote + backslash + n + quote] with [quote + newline + quote]
+        fixed_content = raw_content.replace('"\\n"', '"\n"')
+        
+        # 3. Parse the fixed content from memory
         df = pd.read_csv(
-            file_path, 
-            engine='python', 
-            sep=',',            # FORCE comma separator
-            quotechar='"',      # Handle quotes around text
-            escapechar='\\',    # Handle escaped characters inside text 
-            on_bad_lines='skip',
-            encoding='utf-8',
-            header=None  # Crucial: Load everything as data first
+            io.StringIO(fixed_content),
+            sep=',',
+            quotechar='"',
+            on_bad_lines='skip', # Skip truly broken lines if any remain
+            encoding='utf-8'
         )
+        
     except Exception as e:
-        logger.error(f"Failed to load CSV normally: {e}")
+        logger.error(f"Failed to load or fix CSV: {e}")
         return pd.DataFrame()
 
     initial_count = len(df)
     
-    # Check if we have enough columns (we expect at least 4)
-    if len(df.columns) >= 4:
-        # Assign names manually
-        # Note: If there are extra columns, we take the first 4
-        current_cols = list(df.columns)
-        new_names = ['text', 'full_date', 'channel_username', 'views']
-        
-        # Rename logic: mapping old indices to new names
-        rename_map = {old: new for old, new in zip(current_cols[:4], new_names)}
-        df = df.rename(columns=rename_map)
-        
-        # Keep only the 4 columns we care about
-        df = df[['text', 'full_date', 'channel_username', 'views']]
-    else:
-        logger.error(f"CSV format error: Found only {len(df.columns)} columns. Expected at least 4.")
-        # Debug: Print first row to see what happened
-        if not df.empty:
-            logger.error(f"First row sample: {df.iloc[0].tolist()}")
+    # 4. Standard Cleaning Pipeline
+    
+    # Ensure columns match expectations (fix any whitespace in names)
+    df.columns = [c.strip() for c in df.columns]
+    
+    # Check if critical columns exist
+    if 'full_date' not in df.columns or 'views' not in df.columns:
+        logger.error(f"Critical columns missing. Found: {df.columns.tolist()}")
         return pd.DataFrame()
 
-    # 1. Remove header row if it exists in data
-    df = df[df['full_date'].astype(str).str.strip() != 'full_date']
-    
-    # 2. Convert datetime
+    # Convert Datetime
     df['full_date'] = pd.to_datetime(df['full_date'], errors='coerce')
     
-    # 3. Drop invalid dates
+    # Filter valid rows
     df = df.dropna(subset=['full_date'])
     
-    # 4. Convert views
+    # Convert Views
     df['views'] = pd.to_numeric(df['views'], errors='coerce').fillna(0)
 
     final_count = len(df)
-    if final_count > 0:
-        logger.info(f"Successfully loaded {final_count} clean records.")
-    else:
-        logger.warning("Loaded file resulted in 0 records after cleaning.")
+    logger.info(f"Successfully repaird & loaded {final_count} records (dropped {initial_count - final_count}).")
     
     return df
 
