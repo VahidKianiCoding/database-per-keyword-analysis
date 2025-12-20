@@ -175,18 +175,34 @@ class TelegramIndustryAnalyzer:
                 'هست', 'نیست', 'دارد', 'داشت', 'می', 'نمی', 'های', 'ها', 'تر', 'ترین', 'می‌شود', 'می‌باشد',
                 'نمی‌شود', 'خواهد', 'نخواهد', 'بوده', 'شده', 'میشود', 'میشوم', 'دارند', 'کنند', 'می‌کنند',
                 'توانست', 'توانسته', 'انجام', 'جهت', 'دریافت', 'ارسال', 'تماس', 'پاسخ', 'سوال', 'قرار',
-                'پایان', 'آغاز', 'شروع', 'مورد', 'بخش', 'حوزه', 'طی', 'طبق', 'برابر', 'سوی', 'ضمن',
-                'کشور', 'استان', 'شهر', 'تهران', 'ایران', 'منطقه', 'محل', 'مکان', 'سراسر',
+                'پایان', 'آغاز', 'شروع', 'مورد', 'بخش', 'طی', 'طبق', 'برابر', 'سوی', 'ضمن',
+                'استان', 'شهر', 'منطقه', 'محل', 'مکان', 'سراسر',
                 'توسط', 'درباره', 'بنابر', 'همچنین', 'اما', 'ولی', 'لذا', 'چرا', 'خیر', 'بله',
                 'اصل', 'آخر', 'اول', 'دوم', 'سوم', 'سایر', 'دیگر', 'کل', 'تمامی', 'برخی', 'بعضی',
                 'عین', 'فقط', 'تنها', 'خیلی', 'بسیار', 'کاملا', 'واقعا', 'حتما', 'شاید',
                 'خود', 'خویش', 'همین', 'همان', 'آنها', 'ایشان', 'ما', 'شما',
                 'مشاوره', 'رایگان', 'تحویل', 'فوری', 'تضمینی', 'اقامت', 'ویژه'
                 'کیش', 'قشم', 'بازی', 'مسابقه', 'دیدار', 'رقابت', 'جدول', 'هواداران',
-                'کارشناس', 'صندوق', 'شناور', 'اتاق'
+                'کارشناس', 'شناور'
             ]
             
             self.stopwords = set(hazm_stops + time_stops + web_stops + general_stops)
+            
+
+            # --- CONTEXT BLACKLISTS (Global Definition) ---
+            self.sports_keywords = [
+                'فوتبال', 'لیگ برتر', 'جام حذفی', 'سرمربی', 'دروازه‌بان', 'هافبک', 'مهاجم', 
+                'پرسپولیس', 'استقلال', 'تراکتور', 'سپاهان', 'لیگ قهرمانان', 'فدراسیون فوتبال',
+                'ورزشگاه', 'المپیک', 'مدال', 'قهرمانی', 'سوت پایان'
+            ]
+            
+            self.ads_keywords = [
+                'مشاوره رایگان', 'فالور', 'ممبر', 'وی‌پی‌ان', 'فیلترشکن', 'کاشت مو', 'مهاجرت تضمینی',
+                'تور لحظه آخری', 'لاماری', 'اقامت'
+            ]
+            
+            # Pre-compile the regex pattern for performance
+            self.blacklist_pattern = '|'.join(self.sports_keywords + self.ads_keywords)
             
             # 5. POS Tagger
             try:
@@ -382,28 +398,15 @@ class TelegramIndustryAnalyzer:
         print(">> Starting NLP analysis (Global & Per Industry)...")
         freq_report = {}
         
-        # --- 0. PRE-PROCESSING: Blacklists ---
+        # --- 0. PRE-PROCESSING: Dynamic Blacklists ---
         
-        # A. Stopwords from Channel Names
+        # A. Stopwords from Channel Names (Keep strictly dynamic)
         if 'channel_username' in self.processed_data.columns: # type: ignore
             channel_names = self.processed_data['channel_username'].astype(str).str.lower().unique().tolist() # type: ignore
             self.stopwords.update(channel_names) # type: ignore
             self.stopwords.update([f"@{name}" for name in channel_names]) # type: ignore
         
-        # B. Context Blacklist (To remove entire posts if they are off-topic)
-        # If a post contains these words, we assume it's sports/spam, not industry news.
-        SPORTS_KEYWORDS = [
-            'فوتبال', 'لیگ برتر', 'جام حذفی', 'سرمربی', 'دروازه‌بان', 'هافبک', 'مهاجم', 
-            'پرسپولیس', 'استقلال', 'تراکتور', 'سپاهان', 'لیگ قهرمانان', 'فدراسیون فوتبال',
-            'ورزشگاه', 'المپیک', 'مدال', 'قهرمانی', 'سوت پایان', 'هواداران'
-        ]
-        
-        ADS_KEYWORDS = [
-            'مشاوره رایگان', 'فالور', 'ممبر', 'وی‌پی‌ان', 'فیلترشکن', 'کاشت مو', 'مهاجرت تضمینی',
-            'تور لحظه آخری', 'لاماری', 'اقامت' # Based on your debug file
-        ]
-        
-        full_blacklist_pattern = '|'.join(SPORTS_KEYWORDS + ADS_KEYWORDS)
+        # Note: self.blacklist_pattern is already defined in _setup_hazm
 
         # --- Internal Processing Function ---
         def process_text_batch(texts_list):
@@ -443,26 +446,21 @@ class TelegramIndustryAnalyzer:
                 for t in valid_lemmas:
                     t_lower = t.lower()
                     
-                    # A. Basic Stopword & Length
+                    # A. Stopword & Length
                     if t_lower in self.stopwords or len(t) < 3: continue
                     
                     # B. Numbers
                     if re.search(r'\d', t): continue
                     
-                    # C. Web/IDs/Handles
+                    # C. Web/IDs
                     if any(x in t_lower for x in ['http', 'www', '.com', '.ir', '@', 'id:', 'bot']): continue
                     
                     # D. Emojis & Symbols
                     if not re.match(r'^[آ-یa-zA-Z\u200c]+$', t): continue
 
-                    # E. ENGLISH NOISE FILTER (NEW)
-                    # If word is purely English:
+                    # E. English Noise (Usernames)
                     if re.match(r'^[a-zA-Z]+$', t):
-                        # 1. Drop if it's too long (Usernames usually > 8 chars, e.g. heratwomanshopping)
-                        #    Industry terms like 'PVC', 'Forex', 'Steel' are usually short.
                         if len(t) > 7: continue 
-                        
-                        # 2. Drop specific English spam found in debug
                         if t_lower in ['landing', 'saamim', 'click', 'join', 'admin']: continue
 
                     clean_tokens.append(t)
@@ -478,10 +476,9 @@ class TelegramIndustryAnalyzer:
             industry_df = self.processed_data[self.processed_data[col_name] == True].copy() # type: ignore
             if industry_df.empty: continue
             
-            # --- APPLY CONTEXT FILTER (Crucial Step) ---
-            # Remove rows containing sports/spam keywords
+            # --- APPLY CONTEXT FILTER (Using Pre-compiled Pattern) ---
             initial_count = len(industry_df)
-            mask_noise = industry_df['text'].str.contains(full_blacklist_pattern, regex=True, na=False)
+            mask_noise = industry_df['text'].str.contains(self.blacklist_pattern, regex=True, na=False)
             industry_df = industry_df[~mask_noise]
             
             filtered_count = len(industry_df)
@@ -493,15 +490,15 @@ class TelegramIndustryAnalyzer:
             cnt = process_text_batch(texts)
             freq_report[industry] = dict(cnt.most_common(top_n))            
             
-        # 2. Global Analysis (Apply same filter)
+        # 2. Global Analysis
         print("   -> Analyzing Global (All Industries)...")
         industry_cols = [f"is_{k}" for k in self.keywords.keys() if f"is_{k}" in self.processed_data.columns] # type: ignore
         if industry_cols:
             global_mask = self.processed_data[industry_cols].any(axis=1) # type: ignore
             global_df = self.processed_data[global_mask].copy() # type: ignore
             
-            # Filter Global too
-            mask_noise_global = global_df['text'].str.contains(full_blacklist_pattern, regex=True, na=False)
+            # Filter Global
+            mask_noise_global = global_df['text'].str.contains(self.blacklist_pattern, regex=True, na=False)
             global_df = global_df[~mask_noise_global]
             
             if not global_df.empty:
