@@ -7,6 +7,7 @@ from collections import Counter
 import re
 from datetime import datetime, timedelta
 import os
+import logging
 from tqdm import tqdm
 from urllib.parse import quote_plus
 from dotenv import load_dotenv
@@ -32,6 +33,10 @@ DB_CONFIG = {
     "DB_PORT": os.getenv("DB_PORT"),
     "DB_NAME": os.getenv("DB_NAME"),
 }
+
+# Setup basic logging to see what's getting dropped
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Industry Keywords Definition
 # Organized by sectors as requested
@@ -348,7 +353,7 @@ class TelegramIndustryAnalyzer:
             col_name = f"is_{industry}"
             # Check if dataframe exists and has the column
             if col_name not in self.processed_data.columns: continue # type: ignore
-            
+             
             industry_df = self.processed_data[self.processed_data[col_name] == True] # type: ignore
             if industry_df.empty: continue
             
@@ -484,6 +489,54 @@ class TelegramIndustryAnalyzer:
         plt.close()
         print(">> All charts saved.")
 
+
+def load_and_clean_data(file_path: str) -> pd.DataFrame:
+    """
+    Robustly loads the CSV file, handling parsing errors, repeated headers,
+    and invalid datetime formats automatically.
+    """
+    try:
+        # Attempt 1: Try reading with Python engine which is more forgiving with quotes
+        # on_bad_lines='skip' will ignore lines with too many fields (like line 512 error)
+        df = pd.read_csv(
+            file_path, 
+            engine='python', 
+            on_bad_lines='skip',
+            encoding='utf-8'
+        )
+    except Exception as e:
+        logger.error(f"Failed to load CSV normally: {e}")
+        return pd.DataFrame()
+
+    initial_count = len(df)
+    
+    # 1. Fix: Remove rows that are actually repeated headers
+    # This happens when multiple CSVs are merged or file is corrupted
+    if 'full_date' in df.columns:
+        df = df[df['full_date'] != 'full_date']
+    
+    # 2. Fix: robust datetime conversion
+    # errors='coerce' turns unparseable dates into NaT (Not a Time) instead of crashing
+    df['full_date'] = pd.to_datetime(df['full_date'], errors='coerce')
+    
+    # 3. Fix: Drop rows where date conversion failed (essential for time-series analysis)
+    df = df.dropna(subset=['full_date'])
+    
+    # 4. Ensure numeric types for views
+    if 'views' in df.columns:
+        df['views'] = pd.to_numeric(df['views'], errors='coerce').fillna(0)
+
+    final_count = len(df)
+    dropped_count = initial_count - final_count
+    
+    if dropped_count > 0:
+        logger.warning(f"Dropped {dropped_count} invalid or corrupted rows during cleaning.")
+        
+    logger.info(f"Successfully loaded {final_count} clean records.")
+    
+    return df
+
+
         
 if __name__ == "__main__":
     # --- Configuration ---
@@ -534,7 +587,7 @@ if __name__ == "__main__":
                 first_line = pd.read_csv(CSV_FILENAME, nrows=1, sep=CSV_SEPARATOR)
                 if 'full_date' in first_line.columns:
                     # File HAS headers
-                    analyzer.processed_data = pd.read_csv(CSV_FILENAME, parse_dates=['full_date'], sep=CSV_SEPARATOR)
+                    analyzer.processed_data = load_and_clean_data('telegram_industry_data.csv')
                 else:
                     # File does NOT have headers (DataGrip export without column names)
                     print("   -> No header detected. Assigning column names manually...")
