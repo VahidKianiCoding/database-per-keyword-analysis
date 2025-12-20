@@ -431,7 +431,7 @@ class TelegramIndustryAnalyzer:
                 df_ind = self.processed_data[self.processed_data[col_name] == True].copy()
                 if not df_ind.empty:
                     weekly_counts = df_ind.resample('W', on='full_date').size()
-                    plt.plot(weekly_counts.index, weekly_counts.values, label=make_farsi_text_readable(industry))
+                    plt.plot(weekly_counts.index, weekly_counts.values, label=make_farsi_text_readable(industry)) # type: ignore
         
         plt.title(make_farsi_text_readable("Weekly Trend of Relevant Posts")) # type: ignore
         plt.legend()
@@ -445,62 +445,35 @@ class TelegramIndustryAnalyzer:
 if __name__ == "__main__":
     # Settings
     CSV_FILENAME = "telegram_industry_data.csv"
-    FORCE_FETCH = False  # Set to True if you want to ignore the CSV and fetch fresh data from DB
     
-    # Initialize
-    try:
-        analyzer = TelegramIndustryAnalyzer(DB_CONFIG, INDUSTRY_KEYWORDS)
-        
-        # Check if local cache exists
-        if os.path.exists(CSV_FILENAME) and not FORCE_FETCH:
-            print(f">> Local cache found: {CSV_FILENAME}")
-            print(">> Loading data from disk (FAST MODE)...")
+    if os.path.exists(CSV_FILENAME):
+        print(f">> Loading data from: {CSV_FILENAME}")
+        try:
+            # IMPORTANT: Check your CSV separator. Using ',' as default. 
+            # If exported with '|' pipe, change to sep='|'
+            analyzer.processed_data = pd.read_csv(CSV_FILENAME, parse_dates=['full_date'], sep=',') # type: ignore
+            print(f">> Loaded {len(analyzer.processed_data)} records.") # type: ignore
             
-            # Read CSV
-            # parse_dates ensures 'full_date' is read as datetime object, not string
-            analyzer.processed_data = pd.read_csv(CSV_FILENAME, parse_dates=['full_date'])
-            print(f">> Loaded {len(analyzer.processed_data)} posts from local file.")
+            # 1. Categorize
+            analyzer.categorize_posts() # type: ignore
             
-        else:
-            print(">> No local cache found (or FORCE_FETCH is True).")
-            print(">> Fetching data from Database (SLOW MODE)...")
-        
-            # Calculate dynamic dates: Today and 1 year ago
-            today = datetime.now()
-            one_year_ago = today - timedelta(days=30)
+            # 2. Basic Stats
+            stats = analyzer.generate_stats_report() # type: ignore
             
-            # Convert to string format 'YYYY-MM-DD'
-            end_date_str = today.strftime('%Y-%m-%d')
-            start_date_str = one_year_ago.strftime('%Y-%m-%d')
+            # 3. Specific Keyword Breakdown (New Requirement)
+            keyword_stats = analyzer.analyze_keyword_breakdown() # type: ignore
             
-            # Run Fetch Pipeline
-            analyzer.fetch_and_filter_data(start_date_str, end_date_str)
-        
-            # Save to CSV for next time
-            if analyzer.processed_data is not None and not analyzer.processed_data.empty:
-                # Categorize
-                analyzer.categorize_posts()
-                print(f">> Saving data to {CSV_FILENAME} for future runs...")
-                analyzer.processed_data.to_csv(CSV_FILENAME, index=False, encoding='utf-8-sig')
-                print(">> Save complete.")
-        
-        if analyzer.processed_data is not None and not analyzer.processed_data.empty:
-            # Categorize
-            analyzer.categorize_posts()
+            # 4. NLP Analysis
+            freq_stats = analyzer.analyze_word_frequency() # type: ignore
             
-            # Reports
-            stats = analyzer.generate_stats_report()
+            # 5. Visualizations
+            analyzer.plot_visualizations(stats, freq_stats, keyword_stats) # type: ignore
             
-            # Note: NLP might still take time, but now you can debug it without DB lag
-            freq = analyzer.analyze_word_frequency()
+            print(">> Analysis Complete. Check the generated .png files.")
             
-            # Plots
-            analyzer.plot_visualizations(stats, freq)
-        else:
-            print(">> No data available to process.")
-        
-    except Exception as e:
-        print(f"CRITICAL ERROR: {e}")
-        # Print full traceback for debugging
-        import traceback
-        traceback.print_exc()
+        except Exception as e:
+            print(f"Error processing CSV: {e}")
+            import traceback
+            traceback.print_exc()
+    else:
+        print(f"File {CSV_FILENAME} not found. Please export data first.")
