@@ -233,10 +233,10 @@ class TelegramIndustryAnalyzer:
         
         for industry, keys in self.keywords.items(): # type: ignore
             col_name = f"is_{industry}"
-            if col_name not in self.processed_data.columns:
+            if col_name not in self.processed_data.columns: # type: ignore
                 continue
             
-            df_ind = self.processed_data[self.processed_data[col_name] == True]
+            df_ind = self.processed_data[self.processed_data[col_name] == True] # type: ignore
             if df_ind.empty:
                 continue
                 
@@ -317,8 +317,8 @@ class TelegramIndustryAnalyzer:
         for industry in self.keywords.keys(): # type: ignore
             col_name = f"is_{industry}"
             # Check if dataframe exists and has the column
-            if col_name not in self.processed_data.columns: continue
-            industry_df = self.processed_data[self.processed_data[col_name] == True]
+            if col_name not in self.processed_data.columns: continue # type: ignore
+            industry_df = self.processed_data[self.processed_data[col_name] == True] # type: ignore
             if industry_df.empty: continue
             
             industry_counter = Counter()
@@ -426,8 +426,8 @@ class TelegramIndustryAnalyzer:
         plt.figure(figsize=(12, 6))
         for industry in self.keywords.keys(): # type: ignore
             col_name = f"is_{industry}"
-            if col_name in self.processed_data.columns:
-                df_ind = self.processed_data[self.processed_data[col_name] == True].copy()
+            if col_name in self.processed_data.columns: # type: ignore
+                df_ind = self.processed_data[self.processed_data[col_name] == True].copy() # type: ignore
                 if not df_ind.empty:
                     weekly_counts = df_ind.resample('W', on='full_date').size()
                     plt.plot(weekly_counts.index, weekly_counts.values, label=make_farsi_text_readable(industry)) # type: ignore
@@ -459,9 +459,9 @@ if __name__ == "__main__":
         if FORCE_FETCH or not os.path.exists(CSV_FILENAME):
             print(f">> Mode: ONLINE (Reason: FORCE_FETCH={FORCE_FETCH} or File Missing)")
             
-            # Calculate dynamic dates (Last 365 days)
+            # Calculate dynamic dates (Last n days)
             today = datetime.now()
-            one_year_ago = today - timedelta(days=365)
+            one_year_ago = today - timedelta(days=30)
             
             start_str = one_year_ago.strftime('%Y-%m-%d')
             end_str = today.strftime('%Y-%m-%d')
