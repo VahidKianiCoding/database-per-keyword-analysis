@@ -127,40 +127,60 @@ class TelegramIndustryAnalyzer:
         Configures Hazm models with optimized parameters for Telegram data.
         """
         try:
-            # 1. Normalizer with user-approved parameters
+            # 1. Normalizer
             self.normalizer = Normalizer(
                 correct_spacing=True,
                 remove_diacritics=True,
                 remove_specials_chars=True,
                 decrease_repeated_chars=True,
                 persian_style=True,
-                persian_numbers=False, # Keep English digits for easier filtering
+                persian_numbers=False,
                 unicodes_replacement=True,
                 seperate_mi=True
             )
             
-            # 2. Informal Normalizer (Crucial for Telegram)
+            # 2. Informal Normalizer
             self.informal_normalizer = InformalNormalizer()
             
             # 3. Tokenizer & Lemmatizer
             self.tokenizer = word_tokenize
             self.lemmatizer = Lemmatizer()
             
-            # 4. Stopwords Setup
+            # 4. Stopwords Setup (Enhanced)
             hazm_stops = stopwords_list()
-            domain_stops = [
+            
+            # A. Time & Date Noise
+            time_stops = [
+                'سال', 'ماه', 'روز', 'هفته', 'ساعت', 'دقیقه', 'ثانیه', 'امروز', 'دیروز', 'فردا', 'امشب',
+                'شنبه', 'یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه',
+                'فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور', 
+                'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند',
+                'ژانویه', 'فوریه', 'مارس', 'آوریل', 'مه', 'ژوئن', 'ژوئیه', 'اوت', 'سپتامبر', 'اکتبر', 'نوامبر', 'دسامبر',
+                'میلادی', 'شمسی', 'قمری', 'گذشته', 'آینده', 'کنونی', 'جاری'
+            ]
+            
+            # B. URL & Web Noise
+            web_stops = [
+                'http', 'https', 'www', 'com', 'ir', 'org', 'net', 'html', 'htm', 'php', 
+                'link', 'join', 'channel', 'id', 'admin', 'bot', 'click', 'site', 'website',
+                'لینک', 'سایت', 'وبسایت', 'اینستاگرام', 'تلگرام', 'واتساپ', 'یوتیوب', 'توییتر',
+                'عضو', 'عضویت', 'کانال', 'گروه', 'پیج', 'ادمین', 'ایدی', 'آیدی'
+            ]
+            
+            # C. General Noise & Verbs
+            general_stops = [
                 'هزار', 'میلیون', 'میلیارد', 'تومان', 'ریال', 'دلار', 'درصد', 'عدد', 'شماره',
-                'سال', 'ماه', 'روز', 'شنبه', 'یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه',
-                'گزارش', 'خبر', 'ادامه', 'تصویر', 'لینک', 'عضو', 'کانال', 'سلام', 'درود', 'جهت', 'مطلب',
+                'گزارش', 'خبر', 'ادامه', 'تصویر', 'مطلب', 'صفحه', 'نسخه', 'منتشر', 'انتشار',
                 'افزایش', 'کاهش', 'نیز', 'باید', 'شدن', 'داد', 'کرد', 'کند', 'است', 'بود', 'شد', 'گفت', 'وی',
                 'این', 'آن', 'با', 'بر', 'برای', 'که', 'از', 'به', 'در', 'را', 'تا', 'چون', 'چه', 'اگر',
                 'هست', 'نیست', 'دارد', 'داشت', 'می', 'نمی', 'های', 'ها', 'تر', 'ترین', 'می‌شود', 'می‌باشد',
-                'نمی‌شود', 'خواهد', 'نخواهد', 'بوده', 'شده', 'میشود', 'میشوم', 'دارند', 'کنند'
+                'نمی‌شود', 'خواهد', 'نخواهد', 'بوده', 'شده', 'میشود', 'میشوم', 'دارند', 'کنند', 'می‌کنند',
+                'بسیار', 'خیلی', 'تمام', 'همه', 'هیچ', 'برخی', 'بعضی', 'اغلب', 'شاید', 'حتما'
             ]
-            self.stopwords = set(hazm_stops + domain_stops)
             
-            # 5. POS Tagger (Auto-Download / Cache Mode)
-            # This uses the official Hazm logic to fetch from HuggingFace if not present
+            self.stopwords = set(hazm_stops + time_stops + web_stops + general_stops)
+            
+            # 5. POS Tagger
             try:
                 from hazm import POSTagger
                 print(">> NLP: Initializing POS Tagger (This may download the model ~20MB if not cached)...")
@@ -168,9 +188,7 @@ class TelegramIndustryAnalyzer:
                 print(">> NLP: POS Tagger loaded successfully (High Accuracy Mode).")
             except Exception as tag_err:
                 self.tagger = None
-                print(f">> NLP: Warning - POS Tagger failed to load ({tag_err}).")
-                print("   -> Reason: Likely internet connection issue to HuggingFace or missing library.")
-                print("   -> Action: Falling back to simple Lemmatization (Less accurate but functional).")
+                print(f">> NLP: Warning - POS Tagger failed to load ({tag_err}). Fallback enabled.")
                 
         except Exception as e:
             print(f"Error setting up Hazm: {e}")
