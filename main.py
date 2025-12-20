@@ -502,6 +502,9 @@ def load_and_clean_data(file_path: str) -> pd.DataFrame:
         df = pd.read_csv(
             file_path, 
             engine='python', 
+            sep=',',            # FORCE comma separator
+            quotechar='"',      # Handle quotes around text
+            escapechar='\\',    # Handle escaped characters inside text 
             on_bad_lines='skip',
             encoding='utf-8',
             header=None  # Crucial: Load everything as data first
@@ -514,38 +517,41 @@ def load_and_clean_data(file_path: str) -> pd.DataFrame:
     
     # Check if we have enough columns (we expect at least 4)
     if len(df.columns) >= 4:
-        # Force rename the first 4 columns. 
-        # Any extra columns (due to bad parsing of previous lines) will be ignored.
-        df.columns = ['text', 'full_date', 'channel_username', 'views'] + list(df.columns[4:])
+        # Assign names manually
+        # Note: If there are extra columns, we take the first 4
+        current_cols = list(df.columns)
+        new_names = ['text', 'full_date', 'channel_username', 'views']
+        
+        # Rename logic: mapping old indices to new names
+        rename_map = {old: new for old, new in zip(current_cols[:4], new_names)}
+        df = df.rename(columns=rename_map)
         
         # Keep only the 4 columns we care about
         df = df[['text', 'full_date', 'channel_username', 'views']]
     else:
         logger.error(f"CSV format error: Found only {len(df.columns)} columns. Expected at least 4.")
+        # Debug: Print first row to see what happened
+        if not df.empty:
+            logger.error(f"First row sample: {df.iloc[0].tolist()}")
         return pd.DataFrame()
 
-    # 1. Remove the header row if it became part of the data
-    # Since we used header=None, the row containing "full_date" is now just a data row.
-    # We filter it out safely.
+    # 1. Remove header row if it exists in data
     df = df[df['full_date'].astype(str).str.strip() != 'full_date']
     
-    # 2. robust datetime conversion
-    # errors='coerce' turns unparseable dates into NaT
+    # 2. Convert datetime
     df['full_date'] = pd.to_datetime(df['full_date'], errors='coerce')
     
-    # 3. Drop rows where date conversion failed
+    # 3. Drop invalid dates
     df = df.dropna(subset=['full_date'])
     
-    # 4. Ensure numeric types for views
+    # 4. Convert views
     df['views'] = pd.to_numeric(df['views'], errors='coerce').fillna(0)
 
     final_count = len(df)
-    dropped_count = initial_count - final_count
-    
-    if dropped_count > 0:
-        logger.warning(f"Dropped {dropped_count} invalid or header rows.")
-        
-    logger.info(f"Successfully loaded {final_count} clean records.")
+    if final_count > 0:
+        logger.info(f"Successfully loaded {final_count} clean records.")
+    else:
+        logger.warning("Loaded file resulted in 0 records after cleaning.")
     
     return df
 
