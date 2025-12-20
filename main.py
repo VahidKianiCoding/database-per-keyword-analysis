@@ -601,6 +601,80 @@ class TelegramIndustryAnalyzer:
                 
                 ax.annotate(f'{value:,}', (x, y), xytext=offset, 
                             textcoords='offset points', ha=ha, va=va, fontsize=12)
+                
+        # ---------------------------------------------------------
+        # 1. Bar Chart: Total Posts per Industry
+        # ---------------------------------------------------------
+        if stats_report:
+            data = []
+            for k, v in stats_report.items():
+                data.append({'Industry': k, 'Count': v['count']})
+            df_chart = pd.DataFrame(data).sort_values('Count', ascending=False)
+            
+            plt.figure(figsize=(12, 8))
+            ax = sns.barplot(data=df_chart, x='Industry', y='Count', palette="viridis")
+            
+            # Fix X-axis labels
+            labels = [make_farsi_text_readable(name) for name in df_chart['Industry']]
+            ax.set_xticklabels(labels, rotation=45)
+            
+            apply_chart_style(ax, "تعداد کل پست‌ها به تفکیک صنعت", "صنعت", "تعداد پست")
+            add_value_labels(ax, orient='v')
+            
+            plt.tight_layout()
+            plt.savefig("1_industry_counts.png", dpi=300)
+            plt.close()
+
+        # ---------------------------------------------------------
+        # 2. Bar Chart: Top Keywords per Industry
+        # ---------------------------------------------------------
+        if keyword_breakdown:
+            for industry, keys_data in keyword_breakdown.items():
+                if not keys_data: continue
+                
+                top_keys = dict(list(keys_data.items())[:15])
+                df_keys = pd.DataFrame({
+                    'Keyword': [make_farsi_text_readable(k) for k in top_keys.keys()],
+                    'Count': list(top_keys.values())
+                })
+                
+                # Dynamic Height
+                fig_h = max(6, len(df_keys) * 0.5 + 2)
+                plt.figure(figsize=(10, fig_h))
+                
+                ax = sns.barplot(data=df_keys, x='Count', y='Keyword', palette="rocket")
+                
+                apply_chart_style(ax, f"کلمات کلیدی پرتکرار در صنعت {industry}", "تعداد تکرار", "کلمه کلیدی")
+                add_value_labels(ax, orient='h')
+                
+                plt.tight_layout()
+                plt.savefig(f"2_keywords_{industry}.png", dpi=300)
+                plt.close()
+
+        # ---------------------------------------------------------
+        # 3. Bar Chart: Top Channels per Industry
+        # ---------------------------------------------------------
+        if stats_report:
+            for industry, data in stats_report.items():
+                top_ch = data['top_channels']
+                if top_ch.empty: continue
+                
+                df_ch = pd.DataFrame({
+                    'Channel': top_ch.index,
+                    'Views': top_ch.values
+                })
+                
+                fig_h = max(6, len(df_ch) * 0.5 + 2)
+                plt.figure(figsize=(10, fig_h))
+                
+                ax = sns.barplot(data=df_ch, x='Views', y='Channel', palette="mako")
+                
+                apply_chart_style(ax, f"برترین کانال‌ها (بازدید کل) در صنعت {industry}", "مجموع بازدید", "نام کانال")
+                add_value_labels(ax, orient='h')
+                
+                plt.tight_layout()
+                plt.savefig(f"3_top_channels_{industry}.png", dpi=300)
+                plt.close()
 
 
 def load_and_clean_data(file_path: str) -> pd.DataFrame:
