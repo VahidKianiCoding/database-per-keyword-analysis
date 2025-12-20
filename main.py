@@ -443,37 +443,72 @@ class TelegramIndustryAnalyzer:
 
         
 if __name__ == "__main__":
-    # Settings
+    # --- Configuration ---
     CSV_FILENAME = "telegram_industry_data.csv"
+    FORCE_FETCH = False  # Set to True to ignore cache and fetch fresh data from DB
+    CSV_SEPARATOR = ','  # Change to '|' if your export used pipes
     
-    if os.path.exists(CSV_FILENAME):
-        print(f">> Loading data from: {CSV_FILENAME}")
-        try:
-            # IMPORTANT: Check your CSV separator. Using ',' as default. 
-            # If exported with '|' pipe, change to sep='|'
-            analyzer.processed_data = pd.read_csv(CSV_FILENAME, parse_dates=['full_date'], sep=',') # type: ignore
-            print(f">> Loaded {len(analyzer.processed_data)} records.") # type: ignore
+    # Initialize Analyzer
+    # Note: DB connection will be attempted only if needed inside fetch method or if we pass config here
+    analyzer = TelegramIndustryAnalyzer(DB_CONFIG, INDUSTRY_KEYWORDS)
+    
+    try:
+        # DECISION LOGIC: Fetch from DB or Load from Disk?
+        data_loaded = False
+        
+        # Condition 1: Fetch if forced OR file doesn't exist
+        if FORCE_FETCH or not os.path.exists(CSV_FILENAME):
+            print(f">> Mode: ONLINE (Reason: FORCE_FETCH={FORCE_FETCH} or File Missing)")
             
-            # 1. Categorize
-            analyzer.categorize_posts() # type: ignore
+            # Calculate dynamic dates (Last 365 days)
+            today = datetime.now()
+            one_year_ago = today - timedelta(days=365)
             
-            # 2. Basic Stats
-            stats = analyzer.generate_stats_report() # type: ignore
+            start_str = one_year_ago.strftime('%Y-%m-%d')
+            end_str = today.strftime('%Y-%m-%d')
             
-            # 3. Specific Keyword Breakdown (New Requirement)
-            keyword_stats = analyzer.analyze_keyword_breakdown() # type: ignore
+            # 1. Fetch
+            analyzer.fetch_and_filter_data(start_str, end_str)
             
-            # 4. NLP Analysis
-            freq_stats = analyzer.analyze_word_frequency() # type: ignore
+            # 2. Save to CSV (Cache)
+            if analyzer.processed_data is not None and not analyzer.processed_data.empty:
+                print(f">> Saving fetched data to {CSV_FILENAME}...")
+                analyzer.processed_data.to_csv(CSV_FILENAME, index=False, encoding='utf-8-sig', sep=CSV_SEPARATOR)
+                data_loaded = True
+            else:
+                print("!! Warning: No data fetched from Database.")
+                
+        # Condition 2: Load from local cache
+        else:
+            print(f">> Mode: OFFLINE (Loading {CSV_FILENAME})")
+            analyzer.processed_data = pd.read_csv(CSV_FILENAME, parse_dates=['full_date'], sep=CSV_SEPARATOR)
+            data_loaded = True
+            print(f">> Loaded {len(analyzer.processed_data)} records from disk.")
+
+        # --- ANALYSIS PIPELINE ---
+        if data_loaded and analyzer.processed_data is not None and not analyzer.processed_data.empty:
             
-            # 5. Visualizations
-            analyzer.plot_visualizations(stats, freq_stats, keyword_stats) # type: ignore
+            # Step 1: Categorize Posts
+            analyzer.categorize_posts()
             
-            print(">> Analysis Complete. Check the generated .png files.")
+            # Step 2: Generate Statistics
+            stats = analyzer.generate_stats_report()
             
-        except Exception as e:
-            print(f"Error processing CSV: {e}")
-            import traceback
-            traceback.print_exc()
-    else:
-        print(f"File {CSV_FILENAME} not found. Please export data first.")
+            # Step 3: Specific Keyword Breakdown
+            keyword_stats = analyzer.analyze_keyword_breakdown()
+            
+            # Step 4: NLP & Word Cloud Analysis
+            freq_stats = analyzer.analyze_word_frequency()
+            
+            # Step 5: Visualize
+            analyzer.plot_visualizations(stats, freq_stats, keyword_stats)
+            
+            print("\n>> Pipeline Finished Successfully. Check generated PNG files.")
+            
+        else:
+            print(">> No data available to process. Check database connection or CSV file.")
+
+    except Exception as e:
+        print(f"\nCRITICAL ERROR: {e}")
+        import traceback
+        traceback.print_exc()
