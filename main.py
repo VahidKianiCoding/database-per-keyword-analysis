@@ -675,6 +675,96 @@ class TelegramIndustryAnalyzer:
                 plt.tight_layout()
                 plt.savefig(f"3_top_channels_{industry}.png", dpi=300)
                 plt.close()
+                
+        # ---------------------------------------------------------
+        # 4. Word Clouds & Freq Bar Charts
+        # ---------------------------------------------------------
+        if freq_report:
+            for group_name, freqs in freq_report.items():
+                if not freqs: continue
+                
+                # A. Bar Chart (Top 20 Words)
+                top_words = dict(list(freqs.items())[:20])
+                df_words = pd.DataFrame({
+                    'Word': [make_farsi_text_readable(k) for k in top_words.keys()],
+                    'Count': list(top_words.values())
+                })
+                
+                fig_h = max(8, len(df_words) * 0.5 + 2)
+                plt.figure(figsize=(12, fig_h))
+                
+                palette = "magma" if group_name == 'Global_All_Industries' else "crest"
+                ax = sns.barplot(data=df_words, x='Count', y='Word', palette=palette)
+                
+                title_text = f"پرتکرارترین کلمات در {group_name}"
+                if group_name == 'Global_All_Industries':
+                    title_text = "پرتکرارترین کلمات در کل صنایع (Global)"
+                    
+                apply_chart_style(ax, title_text, "تعداد تکرار", "کلمه")
+                add_value_labels(ax, orient='h')
+                
+                plt.tight_layout()
+                plt.savefig(f"4_barchart_freq_{group_name}.png", dpi=300)
+                plt.close()
+
+                # B. Word Cloud
+                reshaped_freqs = {}
+                if HAS_RESHAPER:
+                    for k, v in freqs.items():
+                        reshaped_k = get_display(arabic_reshaper.reshape(k))
+                        reshaped_freqs[reshaped_k] = v
+                else:
+                    reshaped_freqs = freqs
+                
+                wc = WordCloud(
+                    width=1600, height=900, 
+                    background_color='white', 
+                    font_path=font_path,
+                    colormap='viridis',
+                    max_words=100
+                )
+                wc.generate_from_frequencies(reshaped_freqs)
+                
+                plt.figure(figsize=(16, 9))
+                plt.imshow(wc, interpolation='bilinear')
+                plt.axis("off")
+                plt.title(make_farsi_text_readable(f"ابر کلمات: {group_name}"), 
+                          fontproperties=persian_font, fontsize=24, pad=20)
+                
+                plt.savefig(f"4_wordcloud_{group_name}.png", dpi=300)
+                plt.close()
+
+        # ---------------------------------------------------------
+        # 5. Time Trend (Weekly)
+        # ---------------------------------------------------------
+        plt.figure(figsize=(14, 7))
+        ax = plt.gca()
+        
+        has_data = False
+        for industry in self.keywords.keys():
+            col_name = f"is_{industry}"
+            if col_name in self.processed_data.columns:
+                df_ind = self.processed_data[self.processed_data[col_name] == True].copy()
+                if not df_ind.empty:
+                    weekly_counts = df_ind.resample('W', on='full_date').size()
+                    label_text = make_farsi_text_readable(industry)
+                    sns.lineplot(x=weekly_counts.index, y=weekly_counts.values, label=label_text, linewidth=2.5)
+                    has_data = True
+        
+        if has_data:
+            apply_chart_style(ax, "روند هفتگی تعداد پست‌ها", "تاریخ", "تعداد پست")
+            
+            leg = plt.legend(fontsize=12)
+            if persian_font:
+                for text in leg.get_texts():
+                    text.set_fontproperties(persian_font)
+            
+            plt.grid(True, alpha=0.3)
+            plt.tight_layout()
+            plt.savefig("5_time_trend.png", dpi=300)
+            plt.close()
+            
+        print(">> All high-quality charts saved successfully.")
 
 
 def load_and_clean_data(file_path: str) -> pd.DataFrame:
