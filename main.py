@@ -492,17 +492,19 @@ class TelegramIndustryAnalyzer:
 
 def load_and_clean_data(file_path: str) -> pd.DataFrame:
     """
-    Robustly loads the CSV file, handling parsing errors, repeated headers,
-    and invalid datetime formats automatically.
+    Robustly loads the CSV file using a 'force headers' strategy.
+    It treats the file as having NO headers initially, assigns names manually,
+    and then filters out the header row if it exists inside the data.
     """
     try:
-        # Attempt 1: Try reading with Python engine which is more forgiving with quotes
-        # on_bad_lines='skip' will ignore lines with too many fields (like line 512 error)
+        # Attempt to read with python engine, skipping bad lines
+        # header=None: We tell pandas NOT to look for a header row. We will assign it manually.
         df = pd.read_csv(
             file_path, 
             engine='python', 
             on_bad_lines='skip',
-            encoding='utf-8'
+            encoding='utf-8',
+            header=None  # Crucial: Load everything as data first
         )
     except Exception as e:
         logger.error(f"Failed to load CSV normally: {e}")
@@ -510,27 +512,38 @@ def load_and_clean_data(file_path: str) -> pd.DataFrame:
 
     initial_count = len(df)
     
-    # 1. Fix: Remove rows that are actually repeated headers
-    # This happens when multiple CSVs are merged or file is corrupted
-    if 'full_date' in df.columns:
-        df = df[df['full_date'] != 'full_date']
+    # Check if we have enough columns (we expect at least 4)
+    if len(df.columns) >= 4:
+        # Force rename the first 4 columns. 
+        # Any extra columns (due to bad parsing of previous lines) will be ignored.
+        df.columns = ['text', 'full_date', 'channel_username', 'views'] + list(df.columns[4:])
+        
+        # Keep only the 4 columns we care about
+        df = df[['text', 'full_date', 'channel_username', 'views']]
+    else:
+        logger.error(f"CSV format error: Found only {len(df.columns)} columns. Expected at least 4.")
+        return pd.DataFrame()
+
+    # 1. Remove the header row if it became part of the data
+    # Since we used header=None, the row containing "full_date" is now just a data row.
+    # We filter it out safely.
+    df = df[df['full_date'].astype(str).str.strip() != 'full_date']
     
-    # 2. Fix: robust datetime conversion
-    # errors='coerce' turns unparseable dates into NaT (Not a Time) instead of crashing
+    # 2. robust datetime conversion
+    # errors='coerce' turns unparseable dates into NaT
     df['full_date'] = pd.to_datetime(df['full_date'], errors='coerce')
     
-    # 3. Fix: Drop rows where date conversion failed (essential for time-series analysis)
+    # 3. Drop rows where date conversion failed
     df = df.dropna(subset=['full_date'])
     
     # 4. Ensure numeric types for views
-    if 'views' in df.columns:
-        df['views'] = pd.to_numeric(df['views'], errors='coerce').fillna(0)
+    df['views'] = pd.to_numeric(df['views'], errors='coerce').fillna(0)
 
     final_count = len(df)
     dropped_count = initial_count - final_count
     
     if dropped_count > 0:
-        logger.warning(f"Dropped {dropped_count} invalid or corrupted rows during cleaning.")
+        logger.warning(f"Dropped {dropped_count} invalid or header rows.")
         
     logger.info(f"Successfully loaded {final_count} clean records.")
     
