@@ -169,14 +169,19 @@ class TelegramIndustryAnalyzer:
             # C. Verbs & Abstract Nouns
             general_stops = [
                 'هزار', 'میلیون', 'میلیارد', 'تومان', 'ریال', 'دلار', 'درصد', 'عدد', 'شماره',
-                'گزارش', 'خبر', 'ادامه', 'تصویر', 'مطلب', 'صفحه', 'نسخه', 'منتشر', 'انتشار', 'منبع',
+                'گزارش', 'خبر', 'ادامه', 'تصویر', 'مطلب', 'صفحه', 'نسخه', 'منتشر', 'انتشار', 'منبع', 'لینک',
                 'افزایش', 'کاهش', 'نیز', 'باید', 'شدن', 'داد', 'کرد', 'کند', 'است', 'بود', 'شد', 'گفت', 'وی',
                 'این', 'آن', 'با', 'بر', 'برای', 'که', 'از', 'به', 'در', 'را', 'تا', 'چون', 'چه', 'اگر',
                 'هست', 'نیست', 'دارد', 'داشت', 'می', 'نمی', 'های', 'ها', 'تر', 'ترین', 'می‌شود', 'می‌باشد',
                 'نمی‌شود', 'خواهد', 'نخواهد', 'بوده', 'شده', 'میشود', 'میشوم', 'دارند', 'کنند', 'می‌کنند',
                 'توانست', 'توانسته', 'انجام', 'جهت', 'دریافت', 'ارسال', 'تماس', 'پاسخ', 'سوال', 'قرار',
                 'پایان', 'آغاز', 'شروع', 'مورد', 'بخش', 'حوزه', 'طی', 'طبق', 'برابر', 'سوی', 'ضمن',
-                'کشور', 'استان', 'شهر', 'تهران', 'ایران', 'منطقه', 'محل', 'مکان'
+                'کشور', 'استان', 'شهر', 'تهران', 'ایران', 'منطقه', 'محل', 'مکان', 'سراسر',
+                'توسط', 'درباره', 'بنابر', 'همچنین', 'اما', 'ولی', 'لذا', 'چرا', 'خیر', 'بله',
+                'اصل', 'آخر', 'اول', 'دوم', 'سوم', 'سایر', 'دیگر', 'کل', 'تمامی', 'برخی', 'بعضی',
+                'عین', 'فقط', 'تنها', 'خیلی', 'بسیار', 'کاملا', 'واقعا', 'حتما', 'شاید',
+                'خود', 'خویش', 'همین', 'همان', 'آنها', 'ایشان', 'ما', 'شما',
+                'مشاوره', 'رایگان', 'تحویل', 'فوری', 'تضمینی', 'اقامت', 'ویژه'
             ]
             
             self.stopwords = set(hazm_stops + time_stops + web_stops + general_stops)
@@ -431,24 +436,32 @@ class TelegramIndustryAnalyzer:
                         if '#' in lemma: lemma = lemma.split('#')[0]
                         valid_lemmas.append(lemma)
 
-                # 4. FINAL FILTERING
+                # 4. FINAL FILTERING (STRICT MODE)
                 clean_tokens = []
                 for t in valid_lemmas:
                     t_lower = t.lower()
                     
-                    # A. Stopword & Length
+                    # A. Basic Stopword & Length
                     if t_lower in self.stopwords or len(t) < 3: continue
                     
-                    # B. Numbers (Strict)
+                    # B. Numbers
                     if re.search(r'\d', t): continue
                     
-                    # C. Web/IDs
-                    if any(x in t_lower for x in ['http', 'www', '.com', '.ir', '@']): continue
+                    # C. Web/IDs/Handles
+                    if any(x in t_lower for x in ['http', 'www', '.com', '.ir', '@', 'id:', 'bot']): continue
                     
-                    # D. Emojis & Symbols (The Regex Fix)
-                    # We keep only words containing Persian or English alphabets
-                    # This removes "👇", "!!!", ">>>" etc.
+                    # D. Emojis & Symbols
                     if not re.match(r'^[آ-یa-zA-Z\u200c]+$', t): continue
+
+                    # E. ENGLISH NOISE FILTER (NEW)
+                    # If word is purely English:
+                    if re.match(r'^[a-zA-Z]+$', t):
+                        # 1. Drop if it's too long (Usernames usually > 8 chars, e.g. heratwomanshopping)
+                        #    Industry terms like 'PVC', 'Forex', 'Steel' are usually short.
+                        if len(t) > 7: continue 
+                        
+                        # 2. Drop specific English spam found in debug
+                        if t_lower in ['landing', 'saamim', 'click', 'join', 'admin']: continue
 
                     clean_tokens.append(t)
                         
