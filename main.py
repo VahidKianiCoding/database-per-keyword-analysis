@@ -72,8 +72,8 @@ def make_farsi_text_readable(text):
     Requires arabic-reshaper and python-bidi.
     """
     if HAS_RESHAPER:
-        reshaped_text = arabic_reshaper.reshape(text)
-        return get_display(reshaped_text)
+        reshaped_text = arabic_reshaper.reshape(text) # type: ignore
+        return get_display(reshaped_text) # type: ignore
     return text
 
 class TelegramIndustryAnalyzer:
@@ -124,7 +124,7 @@ class TelegramIndustryAnalyzer:
             dict: {industry_name: compiled_regex_pattern}
         """
         patterns = {}
-        for industry, keys in self.keywords.items():
+        for industry, keys in self.keywords.items(): # type: ignore
             # Join keywords with OR operator (|) and escape special characters
             # Example: (آهن|فولاد|مس)
             pattern_str = '|'.join([re.escape(k) for k in keys])
@@ -207,7 +207,6 @@ class TelegramIndustryAnalyzer:
         Adds boolean columns for each industry (e.g., 'is_Petrochemical').
         """
         if self.processed_data is None or self.processed_data.empty:
-            print("No data to categorize. Run fetch_and_filter_data first.")
             return
 
         print(">> Categorizing posts into industries...")
@@ -218,11 +217,41 @@ class TelegramIndustryAnalyzer:
             # Create a boolean column: True if pattern is found, False otherwise
             col_name = f"is_{industry}"
             self.processed_data[col_name] = self.processed_data['text'].str.contains(pattern, regex=True, na=False)
+        self.processed_data['full_date'] = pd.to_datetime(self.processed_data['full_date'])
         
         # Convert full_date to datetime if strictly needed for plotting later
         self.processed_data['full_date'] = pd.to_datetime(self.processed_data['full_date'])
         print(">> Categorization complete.")
         
+    
+    def analyze_keyword_breakdown(self):
+        """
+        Calculates which specific keywords triggered the matches for each industry.
+        Returns: dict {industry: {keyword: count}}
+        """
+        print(">> Analyzing keyword breakdown (Chart 2 Data)...")
+        breakdown = {}
+        
+        for industry, keys in self.keywords.items(): # type: ignore
+            col_name = f"is_{industry}"
+            if col_name not in self.processed_data.columns:
+                continue
+            
+            df_ind = self.processed_data[self.processed_data[col_name] == True]
+            if df_ind.empty:
+                continue
+                
+            key_counts = {}
+            for k in keys:
+                # Count occurrences of specific keywords
+                count = df_ind['text'].str.contains(re.escape(k), regex=True).sum()
+                if count > 0:
+                    key_counts[k] = count
+            
+            # Sort by count descending
+            breakdown[industry] = dict(sorted(key_counts.items(), key=lambda item: item[1], reverse=True))
+            
+        return breakdown
     
     def generate_stats_report(self):
         """
@@ -231,13 +260,14 @@ class TelegramIndustryAnalyzer:
         Returns:
             dict: A dictionary containing stats per industry.
         """
-        if self.processed_data is None:
-            return {}
-
+        if self.processed_data is None: return {}
+        
         report = {}
         
-        for industry in self.keywords.keys():
+        for industry in self.keywords.keys(): # type: ignore
             col_name = f"is_{industry}"
+            if col_name not in self.processed_data.columns: continue
+            
             # Filter data for this specific industry
             industry_df = self.processed_data[self.processed_data[col_name] == True]
             
@@ -255,19 +285,15 @@ class TelegramIndustryAnalyzer:
                 'top_posts': top_posts,
                 'top_channels': top_channels
             }
-            
-            print(f"--- Stats for {industry} ---")
-            print(f"Total Posts: {post_count}")
-            print(f"Top Channel: {top_channels.index[0] if not top_channels.empty else 'N/A'}")
-
+            print(f"--- {industry}: {post_count} posts ---")
         return report
     
     
-    def analyze_word_frequency(self, top_n=50):
+    def analyze_word_frequency(self, top_n=100):
         """
         Performs NLP analysis using 'hazm' library for normalization and stopword removal.
         """
-        print(">> Starting NLP analysis (Word Frequency)...")
+        print(">> Starting NLP analysis...")
         
         # Initialize Hazm Normalizer
         normalizer = Normalizer()
@@ -280,54 +306,43 @@ class TelegramIndustryAnalyzer:
         domain_stops = [
             'هزار', 'میلیون', 'میلیارد', 'تومان', 'ریال', 'دلار', 'درصد',
             'سال', 'ماه', 'روز', 'شنبه', 'یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه',
-            'گزارش', 'خبر', 'ادامه', 'تصویر', 'لینک', 'عضو', 'کانال', 'سلام', 'درود'
+            'گزارش', 'خبر', 'ادامه', 'تصویر', 'لینک', 'عضو', 'کانال', 'سلام', 'درود', 'جهت',
+            'افزایش', 'کاهش', 'نیز', 'باید', 'شدن', 'داد', 'کرد', 'کند', 'است', 'بود', 'شد', 'گفت', 'وی'
         ]
         
         # Combine both sets
         all_stops = set(hazm_stops + domain_stops)
-
+        
         freq_report = {}
 
-        for industry in self.keywords.keys():
+        for industry in self.keywords.keys(): # type: ignore
             col_name = f"is_{industry}"
             # Check if dataframe exists and has the column
-            if col_name not in self.processed_data.columns:
-                continue
-
+            if col_name not in self.processed_data.columns: continue
             industry_df = self.processed_data[self.processed_data[col_name] == True]
+            if industry_df.empty: continue
             
-            if industry_df.empty:
-                freq_report[industry] = []
-                continue
-            
-            print(f"   Analying {industry} ({len(industry_df)} posts)...")
-            
-            # Counter for this industry
             industry_counter = Counter()
-            
-            # Process text row by row with progress bar
-            # Using dropna() to ensure no errors on empty texts
             texts = industry_df['text'].dropna().astype(str).tolist()
             
-            for text in tqdm(texts, desc=f"Processing {industry}", unit="post"):
+            for text in tqdm(texts, desc=f"NLP: {industry}", leave=False):
                 # Normalize
                 normalized = normalizer.normalize(text)
                 # Tokenize (using simple split for speed, or word_tokenize for precision)
                 # Using simple split is MUCH faster for large datasets and usually enough for word clouds
                 # If you want high precision, use: tokens = word_tokenize(normalized)
-                tokens = normalized.split() 
+                tokens = normalized.split()
                 
                 clean_tokens = [
-                    t for t in tokens 
-                    if t not in all_stops 
-                    and len(t) > 2 
+                    t for t in tokens
+                    if t not in all_stops
+                    and len(t) > 2
                     and not t.isnumeric()
                 ]
                 industry_counter.update(clean_tokens)
             
-            freq_report[industry] = industry_counter.most_common(top_n)
+            freq_report[industry] = dict(industry_counter.most_common(top_n))
             
-        print(">> NLP analysis complete.")
         return freq_report
     
     
