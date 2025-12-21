@@ -127,26 +127,16 @@ class TelegramIndustryAnalyzer:
         Configures Hazm models with optimized parameters for Telegram data.
         """
         try:
-            # 1. Normalizer
-            self.normalizer = Normalizer(
-                correct_spacing=True,
-                remove_diacritics=True,
-                remove_specials_chars=True,
-                decrease_repeated_chars=True,
-                persian_style=True,
-                persian_numbers=False, 
-                unicodes_replacement=True,
-                seperate_mi=True
-            )
-            
-            # 2. Informal Normalizer
+            # 1. Normalizer & Models
+            self.normalizer = Normalizer(correct_spacing=True, remove_diacritics=True, 
+                                       remove_specials_chars=True, decrease_repeated_chars=True, 
+                                       persian_style=True, persian_numbers=False, 
+                                       unicodes_replacement=True, seperate_mi=True)
             self.informal_normalizer = InformalNormalizer()
-            
-            # 3. Tokenizer & Lemmatizer
             self.tokenizer = word_tokenize
             self.lemmatizer = Lemmatizer()
             
-            # 4. Stopwords Setup (FINAL REFINED LIST)
+            # 2. Stopwords Setup
             hazm_stops = stopwords_list()
             
             # A. Time & Date
@@ -189,7 +179,7 @@ class TelegramIndustryAnalyzer:
             self.stopwords = set(hazm_stops + time_stops + web_stops + general_stops)
             
 
-            # --- CONTEXT BLACKLISTS (Global Definition) ---
+            # D. CONTEXT BLACKLISTS (Global Definition)
             self.sports_keywords = [
                 'فوتبال', 'لیگ برتر', 'جام حذفی', 'سرمربی', 'دروازه‌بان', 'هافبک', 'مهاجم', 'مدافع',
                 'پرسپولیس', 'استقلال', 'تراکتور', 'سپاهان', 'لیگ قهرمانان', 'فدراسیون فوتبال',
@@ -198,15 +188,22 @@ class TelegramIndustryAnalyzer:
                 'نیمه اول', 'نیمه دوم', 'وقت اضافه', 'داور', 'سوت', 'شوت', 'پاس گل', 'تیم ملی'
             ]
             
+            # E. ADVERTISEMENTS (Global Definition)
             self.ads_keywords = [
                 'مشاوره رایگان', 'فالور', 'ممبر', 'وی‌پی‌ان', 'فیلترشکن', 'کاشت مو', 'مهاجرت تضمینی',
                 'تور لحظه آخری', 'لاماری', 'اقامت', 'مهاجرت'
             ]
             
+            # F. Channels to completely ignore in ALL stats and charts
+            self.channel_blacklist = [
+                'perspolisirfans', 
+                # Add others here later if needed (e.g. 'IranintlTV' pending decision)
+            ]
+            
             # Pre-compile the regex pattern for performance
             self.blacklist_pattern = '|'.join(self.sports_keywords + self.ads_keywords)
             
-            # 5. POS Tagger
+            # 3. POS Tagger
             try:
                 from hazm import POSTagger
                 print(">> NLP: Initializing POS Tagger...")
