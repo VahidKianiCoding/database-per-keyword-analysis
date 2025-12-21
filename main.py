@@ -572,15 +572,24 @@ class TelegramIndustryAnalyzer:
         import numpy as np
         
         print(">> Generating professional visualizations...")
-        sns.set_theme(style="whitegrid", context="talk") 
+        sns.set_theme(style="white", context="talk")
         
         # Font Setup
-        font_path = os.path.join("assets", "Vazirmatn-Regular.ttf")
-        if not os.path.exists(font_path): font_path = "Vazirmatn-Regular.ttf"
-        try:
-            persian_font = fm.FontProperties(fname=font_path)
-        except:
-            persian_font = None
+        font_paths = [
+            os.path.join("assets", "Vazirmatn-Regular.ttf"),
+            "Vazirmatn-Regular.ttf"
+        ]
+        persian_font = None
+        for fp in font_paths:
+            if os.path.exists(fp):
+                try:
+                    persian_font = fm.FontProperties(fname=fp)
+                    print(f"   -> Found font: {fp}")
+                    break
+                except: continue
+        
+        if not persian_font:
+            print("   -> Warning: Vazirmatn font not found. Charts may have issues.")
 
         # --- Helper: Thousands Separator Formatter ---
         def thousands_fmt(x, pos):
@@ -589,21 +598,33 @@ class TelegramIndustryAnalyzer:
         fmt_ticker = FuncFormatter(thousands_fmt)
 
         # --- Helper: Apply Style ---
-        def apply_chart_style(ax, title, x_label, y_label, x_fmt=False, y_fmt=False):
-            ax.set_title(make_farsi_text_readable(title), fontproperties=persian_font, fontsize=22, pad=25)
-            ax.set_xlabel(make_farsi_text_readable(x_label), fontproperties=persian_font, fontsize=16)
-            ax.set_ylabel(make_farsi_text_readable(y_label), fontproperties=persian_font, fontsize=16)
+        def apply_style_and_save(ax, title, xlabel, ylabel, filename, x_fmt=False, y_fmt=False):
+            ax.set_title(make_farsi_text_readable(title), fontproperties=persian_font, fontsize=24, pad=20, loc='right')
+            ax.set_xlabel(make_farsi_text_readable(xlabel), fontproperties=persian_font, fontsize=18)
+            ax.set_ylabel(make_farsi_text_readable(ylabel), fontproperties=persian_font, fontsize=18)
             
-            # Apply font to ticks
+            # Ticks Font
             for label in ax.get_xticklabels() + ax.get_yticklabels():
                 label.set_fontproperties(persian_font)
+                label.set_fontsize(14)
                 
-            # Apply thousands separator
+            # Formatters
             if x_fmt: ax.xaxis.set_major_formatter(fmt_ticker)
             if y_fmt: ax.yaxis.set_major_formatter(fmt_ticker)
+            
+            # Clean Spines (Axis lines)
+            sns.despine(left=True, bottom=False) # Remove left line, keep bottom
+            ax.spines['bottom'].set_color('#333333')
+            ax.spines['bottom'].set_linewidth(1.5)
+            ax.grid(axis='x', color='#e0e0e0', linestyle='--', linewidth=0.8) # Vertical grid only
+            
+            # Save
+            plt.tight_layout()
+            plt.savefig(filename, dpi=300, bbox_inches='tight')
+            plt.close()
 
         # --- Helper: Add Labels & Fix Overflow ---
-        def add_labels_and_fix_limits(ax, orient='h'):
+        def add_labels(ax, orient='h'):
             # 1. Add Labels
             max_val = 0
             for p in ax.patches:
@@ -611,121 +632,239 @@ class TelegramIndustryAnalyzer:
                 if val > max_val: max_val = val
                 if val <= 0: continue
                 
-                # Position logic
+                # Format with comma
+                label_text = f'{int(val):,}'
+                
                 if orient == 'h':
                     x, y = val, p.get_y() + p.get_height()/2
-                    ha, va = 'left', 'center'
-                    xytext = (8, 0)
+                    ax.annotate(label_text, (x, y), xytext=(8, 0), 
+                                textcoords='offset points', ha='left', va='center', fontsize=12)
                 else:
                     x, y = p.get_x() + p.get_width()/2, val
-                    ha, va = 'center', 'bottom'
-                    xytext = (0, 8)
-                    
-                ax.annotate(f'{int(val):,}', (x, y), xytext=xytext, 
-                            textcoords='offset points', ha=ha, va=va, fontsize=11)
+                    ax.annotate(label_text, (x, y), xytext=(0, 8), 
+                                textcoords='offset points', ha='center', va='bottom', fontsize=12)
             
-            # 2. Fix Overflow (Expand limits by 15%)
+            # Tighten Axis Limits to avoid ugly empty space
             if orient == 'h':
-                ax.set_xlim(0, max_val * 1.15)
+                ax.set_xlim(0, max_val * 1.15) # 15% padding for labels
             else:
                 ax.set_ylim(0, max_val * 1.15)
 
         # ---------------------------------------------------------
-        # 1. Bar Chart: Total Posts per Industry
+        # 1. Bar Chart: Total Posts
         # ---------------------------------------------------------
-        if stats_report:
-            data = []
-            for k, v in stats_report.items():
-                # Use Persian Name
-                fa_name = self.translations.get(k, k)
-                data.append({'Industry': fa_name, 'Count': v['count']})
-            
-            df_chart = pd.DataFrame(data).sort_values('Count', ascending=False)
-            
-            plt.figure(figsize=(12, 8))
-            ax = sns.barplot(data=df_chart, x='Industry', y='Count', palette="viridis")
-            
-            # Fix RTL Labels
-            labels = [make_farsi_text_readable(name) for name in df_chart['Industry']]
-            ax.set_xticklabels(labels, rotation=45) # type: ignore
-            
-            apply_chart_style(ax, "تعداد کل پست‌ها به تفکیک صنعت", "صنعت", "تعداد پست", y_fmt=True)
-            add_labels_and_fix_limits(ax, orient='v')
-            
-            plt.tight_layout()
-            plt.savefig("1_industry_counts.png", dpi=300)
-            plt.close()
+        try:
+            if stats_report:
+                data = []
+                for k, v in stats_report.items():
+                    # Use Persian Name
+                    fa_name = self.translations.get(k, k)
+                    data.append({'Industry': fa_name, 'Count': v['count']})
+                
+                df_chart = pd.DataFrame(data).sort_values('Count', ascending=False)
+                
+                # 16:9 Ratio (approx 16 width, 9 height)
+                plt.figure(figsize=(16, 9))
+                ax = sns.barplot(data=df_chart, x='Industry', y='Count', palette="viridis")
+                
+                # Fix RTL Labels
+                labels = [make_farsi_text_readable(name) for name in df_chart['Industry']]
+                ax.set_xticklabels(labels, rotation=0) # No rotation needed if 16:9 # type: ignore
+                
+                add_labels(ax, orient='v')
+                apply_style_and_save(ax, "تعداد کل پست‌ها به تفکیک صنعت", "صنعت", "تعداد پست", "1_industry_counts.png", y_fmt=True)
+                print("   -> Chart 1 generated.")
+                
+        except Exception as e:
+            print(f"!! Error generating Chart 1: {e}")
 
         # ---------------------------------------------------------
-        # 2. Bar Chart: Top Channels (Views)
+        # 2. Bar Chart: Top Keywords
         # ---------------------------------------------------------
-        if stats_report:
-            for industry, data in stats_report.items():
-                top_ch = data['top_channels']
-                if top_ch.empty: continue
-                
-                df_ch = pd.DataFrame({'Channel': top_ch.index, 'Views': top_ch.values})
-                fa_industry = self.translations.get(industry, industry)
-                
-                fig_h = max(6, len(df_ch) * 0.5 + 2)
-                plt.figure(figsize=(10, fig_h))
-                
-                ax = sns.barplot(data=df_ch, x='Views', y='Channel', palette="mako")
-                
-                apply_chart_style(ax, f"پربازدیدترین کانال‌ها در {fa_industry}", "مجموع بازدید", "نام کانال", x_fmt=True)
-                add_labels_and_fix_limits(ax, orient='h')
-                
-                plt.tight_layout()
-                plt.savefig(f"3_top_channels_{industry}.png", dpi=300)
-                plt.close()
+        try:
+            if keyword_breakdown:
+                for industry, keys_data in keyword_breakdown.items():
+                    if not keys_data: continue
+                    
+                    top_keys = dict(list(keys_data.items())[:15])
+                    df_keys = pd.DataFrame({
+                        'Keyword': [make_farsi_text_readable(k) for k in top_keys.keys()],
+                        'Count': list(top_keys.values())
+                    })
+                    
+                    # Aspect Ratio Logic: Fixed width 16, Height adapts but min 9
+                    fig_h = max(9, len(df_keys) * 0.6) 
+                    plt.figure(figsize=(16, fig_h))
+                    
+                    ax = sns.barplot(data=df_keys, x='Count', y='Keyword', palette="rocket")
+                    
+                    fa_ind = self.translations.get(industry, industry)
+                    add_labels(ax, orient='h')
+                    apply_style_and_save(ax, f"کلمات کلیدی پرتکرار در {fa_ind}", "تعداد تکرار", "کلمه کلیدی", 
+                                       f"2_keywords_{industry}.png", x_fmt=True)
+                print("   -> Chart 2 (Keywords) generated.")
+        
+        except Exception as e:
+            print(f"!! Error generating Chart 2: {e}")
 
         # ---------------------------------------------------------
-        # 3. Bar Chart: Activity Volume
+        # 3. Bar Chart: Top Channels by Views
         # ---------------------------------------------------------
-        categories_to_plot = list(self.keywords.keys()) + ['Global']
-        for category in categories_to_plot:
-            if category == 'Global':
-                industry_cols = [f"is_{k}" for k in self.keywords.keys() if f"is_{k}" in self.processed_data.columns] # type: ignore
-                if not industry_cols: continue
-                # Apply Context Filter to Global too!
-                mask_rel = self.processed_data[industry_cols].any(axis=1) # type: ignore
-                mask_clean = ~self.processed_data['text'].str.contains(self.blacklist_pattern, regex=True, na=False) # type: ignore
-                df_target = self.processed_data[mask_rel & mask_clean] # type: ignore
+        try:
+            if stats_report:
+                for industry, data in stats_report.items():
+                    top_ch = data['top_channels']
+                    if top_ch.empty: continue
+                    
+                    df_ch = pd.DataFrame({'Channel': top_ch.index, 'Views': top_ch.values})
+                    fa_industry = self.translations.get(industry, industry)
+                    
+                    fig_h = max(9, len(df_ch) * 0.6) # Increased spacing factor to 0.6
+                    plt.figure(figsize=(16, fig_h))
+                    
+                    ax = sns.barplot(data=df_ch, x='Views', y='Channel', palette="mako")
+                    
+                    add_labels(ax, orient='h')
+                    apply_style_and_save(ax, f"پربازدیدترین کانال‌ها در {fa_industry}", "مجموع بازدید", "نام کانال", 
+                                       f"3_top_channels_{industry}.png", x_fmt=True)
+                print("   -> Chart 3 (Top Channels) generated.")
+        except Exception as e:
+            print(f"!! Error generating Chart 3: {e}")
+
+        # ---------------------------------------------------------
+        # 4. Frequency Charts & WordClouds
+        # ---------------------------------------------------------
+        try:
+            if freq_report:
+                for group_name, freqs in freq_report.items():
+                    if not freqs: continue
+                    
+                    # A. Bar Chart
+                    top_words = dict(list(freqs.items())[:20])
+                    df_words = pd.DataFrame({
+                        'Word': [make_farsi_text_readable(k) for k in top_words.keys()],
+                        'Count': list(top_words.values())
+                    })
+                    
+                    fig_h = max(9, len(df_words) * 0.6)
+                    plt.figure(figsize=(16, fig_h))
+                    
+                    palette = "magma" if group_name == 'Global_All_Industries' else "crest"
+                    ax = sns.barplot(data=df_words, x='Count', y='Word', palette=palette)
+                    
+                    # Translation logic for Global
+                    fa_group = "کل صنایع" if group_name == 'Global_All_Industries' else self.translations.get(group_name, group_name)
+                    
+                    add_labels(ax, orient='h')
+                    apply_style_and_save(ax, f"پرتکرارترین کلمات در {fa_group}", "تعداد تکرار", "کلمه", 
+                                       f"4_barchart_freq_{group_name}.png", x_fmt=True)
+
+                    # B. Word Cloud
+                    if HAS_RESHAPER:
+                        reshaped_freqs = {get_display(arabic_reshaper.reshape(k)): v for k, v in freqs.items()} # type: ignore
+                    else:
+                        reshaped_freqs = freqs
+                    
+                    wc = WordCloud(width=1920, height=1080, background_color='white', # 16:9 1080p
+                                 font_path=font_paths[0] if os.path.exists(font_paths[0]) else font_paths[1],
+                                 colormap='viridis', max_words=100)
+                    wc.generate_from_frequencies(reshaped_freqs)
+                    
+                    plt.figure(figsize=(16, 9))
+                    plt.imshow(wc, interpolation='bilinear')
+                    plt.axis("off")
+                    plt.title(make_farsi_text_readable(f"ابر کلمات: {fa_group}"), fontproperties=persian_font, fontsize=28, pad=20) # type: ignore
+                    plt.savefig(f"4_wordcloud_{group_name}.png", dpi=300, bbox_inches='tight')
+                    plt.close()
+                print("   -> Chart 4 (NLP) generated.")
+        except Exception as e:
+            print(f"!! Error generating Chart 4: {e}")
+
+        # ---------------------------------------------------------
+        # 5. Time Trend
+        # ---------------------------------------------------------
+        try:
+            plt.figure(figsize=(16, 9))
+            ax = plt.gca()
+            has_data = False
+            
+            for industry in self.keywords.keys():
+                col_name = f"is_{industry}"
+                if col_name in self.processed_data.columns: # type: ignore
+                    df_ind = self.processed_data[self.processed_data[col_name] == True].copy() # type: ignore
+                    if not df_ind.empty:
+                        # Ensure date format
+                        if not pd.api.types.is_datetime64_any_dtype(df_ind['full_date']):
+                            df_ind['full_date'] = pd.to_datetime(df_ind['full_date'], errors='coerce')
+                            
+                        weekly_counts = df_ind.resample('W', on='full_date').size()
+                        label_text = make_farsi_text_readable(self.translations.get(industry, industry))
+                        sns.lineplot(x=weekly_counts.index, y=weekly_counts.values, label=label_text, linewidth=3)
+                        has_data = True
+            
+            if has_data:
+                leg = plt.legend(fontsize=14)
+                if persian_font:
+                    for text in leg.get_texts(): text.set_fontproperties(persian_font)
                 
-                title_suffix = "در کل صنایع"
-                color_palette = "viridis"
+                apply_style_and_save(ax, "روند هفتگی تعداد پست‌ها", "تاریخ", "تعداد پست", "5_time_trend.png", y_fmt=True)
+                print("   -> Chart 5 (Trend) generated.")
             else:
-                col_name = f"is_{category}"
-                if col_name not in self.processed_data.columns: continue # type: ignore
-                # Use clean_df from stats_report if available, else filter manually
-                if category in stats_report:
-                    df_target = stats_report[category]['clean_df']
+                print("   -> Chart 5 skipped (No data for trend).")
+        except Exception as e:
+            print(f"!! Error generating Chart 5: {e}")
+
+        # ---------------------------------------------------------
+        # 6. Activity Volume
+        # ---------------------------------------------------------
+        try:
+            # (Same logic as before, just updated styling)
+            categories_to_plot = list(self.keywords.keys()) + ['Global']
+            for category in categories_to_plot:
+                if category == 'Global':
+                    industry_cols = [f"is_{k}" for k in self.keywords.keys() if f"is_{k}" in self.processed_data.columns] # type: ignore
+                    if not industry_cols: continue
+                    # Apply regex filter to Global
+                    mask_rel = self.processed_data[industry_cols].any(axis=1) # type: ignore
+                    if hasattr(self, 'blacklist_pattern'):
+                        mask_clean = ~self.processed_data['text'].str.contains(self.blacklist_pattern, regex=True, na=False) # type: ignore
+                        df_target = self.processed_data[mask_rel & mask_clean] # type: ignore
+                    else:
+                        df_target = self.processed_data[mask_rel] # type: ignore
+                    
+                    title_suffix = "در کل صنایع"
+                    color_palette = "viridis"
+                    cat_name = "Global"
                 else:
-                    # Fallback logic
-                    df_target = self.processed_data[self.processed_data[col_name] == True] # type: ignore
+                    # Use cleaned data from stats_report if available
+                    if category in stats_report:
+                        df_target = stats_report[category]['clean_df']
+                    else:
+                        col_name = f"is_{category}"
+                        if col_name not in self.processed_data.columns: continue # type: ignore
+                        df_target = self.processed_data[self.processed_data[col_name] == True] # type: ignore
+                    
+                    title_suffix = f"در {self.translations.get(category, category)}"
+                    color_palette = "flare"
+                    cat_name = category
+
+                if df_target.empty: continue
+
+                top_active = df_target['channel_username'].value_counts().head(15)
+                df_active = pd.DataFrame({'Channel': top_active.index, 'PostCount': top_active.values})
                 
-                title_suffix = f"در {self.translations.get(category, category)}"
-                color_palette = "flare"
-
-            if df_target.empty: continue
-
-            top_active = df_target['channel_username'].value_counts().head(15)
-            df_active = pd.DataFrame({'Channel': top_active.index, 'PostCount': top_active.values})
-            
-            fig_h = max(6, len(df_active) * 0.5 + 2)
-            plt.figure(figsize=(10, fig_h))
-            
-            ax = sns.barplot(data=df_active, x='PostCount', y='Channel', palette=color_palette)
-            
-            apply_chart_style(ax, f"فعال‌ترین کانال‌ها (تعداد پست) {title_suffix}", "تعداد پست", "نام کانال", x_fmt=True)
-            add_labels_and_fix_limits(ax, orient='h')
-            
-            plt.tight_layout()
-            safe_cat = "Global" if category == 'Global' else category
-            plt.savefig(f"6_active_channels_{safe_cat}.png", dpi=300)
-            plt.close()
-            
-        print(">> All visualization tasks completed.")
+                fig_h = max(9, len(df_active) * 0.6)
+                plt.figure(figsize=(16, fig_h))
+                
+                ax = sns.barplot(data=df_active, x='PostCount', y='Channel', palette=color_palette)
+                
+                add_labels(ax, orient='h')
+                safe_cat = "Global" if cat_name == 'Global' else cat_name
+                apply_style_and_save(ax, f"فعال‌ترین کانال‌ها (تعداد پست) {title_suffix}", "تعداد پست", "نام کانال", 
+                                   f"6_active_channels_{safe_cat}.png", x_fmt=True)
+            print("   -> Chart 6 (Activity) generated.")
+        except Exception as e:
+            print(f"!! Error generating Chart 6: {e}")
         
     
     def export_channel_audit(self, stats_report, filename="channel_audit_debug.csv"):
