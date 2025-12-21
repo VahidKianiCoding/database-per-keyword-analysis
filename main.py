@@ -594,28 +594,33 @@ class TelegramIndustryAnalyzer:
 
         # --- Helper: Apply Style ---
         def apply_style_and_save(ax, title, xlabel, ylabel, filename, x_fmt=False, y_fmt=False):
-            ax.set_title(make_farsi_text_readable(title), fontproperties=persian_font, fontsize=24, pad=20, loc='right')
-            ax.set_xlabel(make_farsi_text_readable(xlabel), fontproperties=persian_font, fontsize=18)
-            ax.set_ylabel(make_farsi_text_readable(ylabel), fontproperties=persian_font, fontsize=18)
+            # Title: Centered, High Padding
+            ax.set_title(make_farsi_text_readable(title), fontproperties=persian_font, 
+                         fontsize=26, pad=30, loc='center', fontweight='bold')
+            # Labels: Extra Padding
+            ax.set_xlabel(make_farsi_text_readable(xlabel), fontproperties=persian_font, fontsize=18, labelpad=20)
+            ax.set_ylabel(make_farsi_text_readable(ylabel), fontproperties=persian_font, fontsize=18, labelpad=20)
             
             # Ticks Font
             for label in ax.get_xticklabels() + ax.get_yticklabels():
                 label.set_fontproperties(persian_font)
                 label.set_fontsize(14)
                 
-            # Formatters
-            if x_fmt: ax.xaxis.set_major_formatter(fmt_ticker)
-            if y_fmt: ax.yaxis.set_major_formatter(fmt_ticker)
+            # Ticks Font
+            for label in ax.get_xticklabels() + ax.get_yticklabels():
+                label.set_fontproperties(persian_font)
+                label.set_fontsize(14)
             
-            # Clean Spines (Axis lines)
-            sns.despine(left=True, bottom=False) # Remove left line, keep bottom
+            if x_fmt: ax.xaxis.set_major_formatter(FuncFormatter(lambda x, p: '{:,.0f}'.format(x)))
+            if y_fmt: ax.yaxis.set_major_formatter(FuncFormatter(lambda x, p: '{:,.0f}'.format(x)))
+            
+            sns.despine(left=True, bottom=False)
             ax.spines['bottom'].set_color('#333333')
-            ax.spines['bottom'].set_linewidth(1.5)
-            ax.grid(axis='x', color='#e0e0e0', linestyle='--', linewidth=0.8) # Vertical grid only
+            ax.grid(axis='x', color='#e0e0e0', linestyle='--', linewidth=0.8)
             
-            # Save
+            # Save with tight bounding box to include padding
             plt.tight_layout()
-            plt.savefig(filename, dpi=300, bbox_inches='tight')
+            plt.savefig(filename, dpi=300, bbox_inches='tight', pad_inches=0.5)
             plt.close()
 
         # --- Helper: Add Labels & Fix Overflow ---
@@ -629,7 +634,6 @@ class TelegramIndustryAnalyzer:
                 
                 # Format with comma
                 label_text = f'{int(val):,}'
-                
                 if orient == 'h':
                     x, y = val, p.get_y() + p.get_height()/2
                     ax.annotate(label_text, (x, y), xytext=(8, 0), 
@@ -640,10 +644,8 @@ class TelegramIndustryAnalyzer:
                                 textcoords='offset points', ha='center', va='bottom', fontsize=12)
             
             # Tighten Axis Limits to avoid ugly empty space
-            if orient == 'h':
-                ax.set_xlim(0, max_val * 1.15) # 15% padding for labels
-            else:
-                ax.set_ylim(0, max_val * 1.15)
+            if orient == 'h': ax.set_xlim(0, max_val * 1.15)
+            else: ax.set_ylim(0, max_val * 1.15)
 
         # ---------------------------------------------------------
         # 1. Bar Chart: Total Posts
@@ -788,13 +790,25 @@ class TelegramIndustryAnalyzer:
                 if col_name in self.processed_data.columns: # type: ignore
                     df_ind = self.processed_data[self.processed_data[col_name] == True].copy() # type: ignore
                     if not df_ind.empty:
-                        # Ensure date format
                         if not pd.api.types.is_datetime64_any_dtype(df_ind['full_date']):
                             df_ind['full_date'] = pd.to_datetime(df_ind['full_date'], errors='coerce')
-                            
-                        weekly_counts = df_ind.resample('W', on='full_date').size()
+                        
+                        # DYNAMIC FREQUENCY LOGIC
+                        # 1. Calculate total duration
+                        min_date = df_ind['full_date'].min()
+                        max_date = df_ind['full_date'].max()
+                        days_span = (max_date - min_date).days
+                        
+                        # 2. Divide by 7 to get roughly 7 intervals
+                        # If span is small (e.g. 7 days), freq = 1 Day.
+                        # If span is large (e.g. 70 days), freq = 10 Days.
+                        freq_days = max(1, days_span // 7)
+                        resample_rule = f'{freq_days}D'
+                        
+                        weekly_counts = df_ind.resample(resample_rule, on='full_date').size()
+                        
                         label_text = make_farsi_text_readable(self.translations.get(industry, industry))
-                        sns.lineplot(x=weekly_counts.index, y=weekly_counts.values, label=label_text, linewidth=3)
+                        sns.lineplot(x=weekly_counts.index, y=weekly_counts.values, label=label_text, linewidth=3, marker='o')
                         has_data = True
             
             if has_data:
@@ -802,10 +816,10 @@ class TelegramIndustryAnalyzer:
                 if persian_font:
                     for text in leg.get_texts(): text.set_fontproperties(persian_font)
                 
-                apply_style_and_save(ax, "روند هفتگی تعداد پست‌ها", "تاریخ", "تعداد پست", "5_time_trend.png", y_fmt=True)
-                print("   -> Chart 5 (Trend) generated.")
+                apply_style_and_save(ax, "روند زمانی تعداد پست‌ها", "تاریخ", "تعداد پست", "5_time_trend.png", y_fmt=True)
+                print("   -> Chart 5 (Dynamic Trend) generated.")
             else:
-                print("   -> Chart 5 skipped (No data for trend).")
+                print("   -> Chart 5 skipped (No data).")
         except Exception as e:
             print(f"!! Error generating Chart 5: {e}")
 
