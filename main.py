@@ -743,18 +743,26 @@ class TelegramIndustryAnalyzer:
                     else:
                         reshaped_freqs = freqs
                     
-                    wc = WordCloud(width=1920, height=1080, background_color='white', # 16:9 1080p
-                                 font_path=font_paths[0] if os.path.exists(font_paths[0]) else font_paths[1],
+                    # Ensure font path is valid
+                    wc_font = font_paths[0] if os.path.exists(font_paths[0]) else (font_paths[1] if os.path.exists(font_paths[1]) else None)
+
+                    wc = WordCloud(width=1920, height=1080, background_color='white', 
+                                 font_path=wc_font,
                                  colormap='viridis', max_words=100)
                     wc.generate_from_frequencies(reshaped_freqs)
                     
                     plt.figure(figsize=(16, 9))
                     plt.imshow(wc, interpolation='bilinear')
                     plt.axis("off")
-                    plt.title(make_farsi_text_readable(f"ابر کلمات: {fa_group}"), fontproperties=persian_font, fontsize=28, pad=20) # type: ignore
-                    plt.savefig(f"4_wordcloud_{group_name}.png", dpi=300, bbox_inches='tight')
+                    
+                    # Title with padding
+                    plt.title(make_farsi_text_readable(f"ابر کلمات: {fa_group}"), # type: ignore
+                              fontproperties=persian_font, fontsize=28, pad=30, loc='center')
+                    
+                    # CRITICAL FIX: Save with padding
+                    plt.savefig(f"4_wordcloud_{group_name}.png", dpi=300, bbox_inches='tight', pad_inches=0.5)
                     plt.close()
-                print("   -> Chart 4 (NLP) generated.")
+                print("   -> Chart 4 (NLP) generated with proper margins.")
         except Exception as e:
             print(f"!! Error generating Chart 4: {e}")
 
