@@ -883,6 +883,9 @@ if __name__ == "__main__":
             # Step 5: Visualize
             analyzer.plot_visualizations(stats, freq_stats, keyword_stats)
             
+            # Step 6: Export Channel Audit
+            analyzer.export_channel_audit(stats, "channel_audit.csv")
+            
             print("\n>> Pipeline Finished Successfully. Check generated PNG files.")
             
         else:
