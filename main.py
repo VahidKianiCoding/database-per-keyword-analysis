@@ -814,13 +814,15 @@ class TelegramIndustryAnalyzer:
                         # STANDARD RESAMPLING LOGIC
                         # Days with no posts will automatically get a count of 0.
                         daily_counts = df_ind.resample('D', on='full_date').size()
+                        weekly_counts = df_ind.resample('W', on='full_date').size()
+                        monthly_counts = df_ind.resample('M', on='full_date').size()
                         
                         # Label setup
                         label_text = make_farsi_text_readable(self.translations.get(industry, industry))
                         
                         # Plot
                         # marker='o' shows exact data points
-                        sns.lineplot(x=daily_counts.index, y=daily_counts.values, label=label_text, linewidth=3, marker='o')
+                        sns.lineplot(x=weekly_counts.index, y=weekly_counts.values, label=label_text, linewidth=3, marker='o')
                         has_data = True
             
             if has_data:
