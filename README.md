@@ -26,7 +26,7 @@
 1. **Clone the repository:**
 
    ```bash
-   git clone [https://github.com/yourusername/telegram-industry-analyzer.git](https://github.com/yourusername/telegram-industry-analyzer.git)
+   git clone [https://github.com/VahidKianiCoding/database-per-keyword-analysis.git](https://github.com/VahidKianiCoding/database-per-keyword-analysis.git)
    cd telegram-industry-analyzer
 
 2. **Create a virtual environment (Recommended):**
