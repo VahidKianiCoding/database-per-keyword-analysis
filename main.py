@@ -916,7 +916,44 @@ class TelegramIndustryAnalyzer:
             df_export.to_csv(filename, index=False, encoding='utf-8-sig')
             print(">> Export successful.")
         else:
-            print(">> Warning: No data to export.")    
+            print(">> Warning: No data to export.")
+            
+    
+    def debug_specific_keyword(self, industry, keyword, filename="keyword_debug.csv"):
+        """
+        Exports posts containing a specific keyword within a specific industry.
+        Useful for debugging why a generic word (like 'Aluminium') ranks high.
+        """
+        print(f">> Debugging keyword '{keyword}' in industry '{industry}'...")
+        col_name = f"is_{industry}"
+        
+        if col_name not in self.processed_data.columns: # type: ignore
+            print(f"   Error: Industry column {col_name} not found.")
+            return
+
+        # Filter: Industry matches AND text contains keyword
+        mask_ind = self.processed_data[col_name] == True # type: ignore
+        mask_key = self.processed_data['text'].str.contains(keyword, na=False) # type: ignore
+        
+        # Apply Channel Blacklist & Context Filter too (to see what remains AFTER filtering)
+        clean_df = self.processed_data[mask_ind & mask_key].copy() # type: ignore
+        
+        if hasattr(self, 'channel_blacklist') and self.channel_blacklist:
+             mask_ch = clean_df['channel_username'].astype(str).str.lower().isin([x.lower() for x in self.channel_blacklist])
+             clean_df = clean_df[~mask_ch]
+
+        if hasattr(self, 'blacklist_pattern') and self.blacklist_pattern:
+             mask_noise = clean_df['text'].str.contains(self.blacklist_pattern, regex=True, na=False)
+             clean_df = clean_df[~mask_noise]
+        
+        # Select relevant columns
+        result = clean_df[['full_date', 'channel_username', 'text']].copy()
+        
+        if not result.empty:
+            result.to_csv(filename, index=False, encoding='utf-8-sig')
+            print(f">> Exported {len(result)} posts containing '{keyword}' to {filename}.")
+        else:
+            print(f">> No posts found with keyword '{keyword}' after filtering.")
 
 
 
