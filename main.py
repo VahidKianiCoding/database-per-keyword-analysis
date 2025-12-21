@@ -356,14 +356,15 @@ class TelegramIndustryAnalyzer:
     
     def generate_stats_report(self):
         """
-        Calculates statistics for each industry, extracted AFTER removing context noise (sports/ads).
+        Calculates statistics for each industry, extracted AFTER removing:
+        1. Blacklisted channels
+        2. Context noise (sports/ads)
         """
         if self.processed_data is None: return {}
         
-        print(">> Generating clean statistics (applying context filters)...")
+        print(">> Generating clean statistics (applying filters)...")
         report = {}
         
-        # Define Translations Mapping inside the class or method
         self.translations = {
             'Petrochemical': 'پتروشیمی',
             'Steel_Chain': 'زنجیره فولاد',
@@ -380,32 +381,29 @@ class TelegramIndustryAnalyzer:
             # 1. Select Industry Data
             industry_df = self.processed_data[self.processed_data[col_name] == True].copy()
             
-            # 2. CRITICAL: Apply Context Filter (Same as NLP)
-            # This ensures top channels are calculated based on CLEAN data only
+            # 2. FILTER: Remove Blacklisted Channels
+            if hasattr(self, 'channel_blacklist') and self.channel_blacklist:
+                # Normalizing to lower case for comparison
+                mask_channel = industry_df['channel_username'].astype(str).str.lower().isin([x.lower() for x in self.channel_blacklist])
+                industry_df = industry_df[~mask_channel]
+            
+            # 3. FILTER: Apply Context Filter (Sports/Ads)
             if hasattr(self, 'blacklist_pattern') and self.blacklist_pattern:
-                initial_len = len(industry_df)
                 mask_noise = industry_df['text'].str.contains(self.blacklist_pattern, regex=True, na=False)
                 industry_df = industry_df[~mask_noise]
-                dropped = initial_len - len(industry_df)
-                if dropped > 0:
-                    print(f"   -> {industry}: Excluded {dropped} off-topic posts from stats.")
             
             if industry_df.empty: continue
 
-            # 3. Compute Stats on Cleaned Data
+            # 4. Compute Stats on Cleaned Data
             post_count = len(industry_df)
-            
-            # Top posts by views
             top_posts = industry_df.nlargest(20, 'views')[['full_date', 'channel_username', 'views', 'text']]
-            
-            # Top channels by total views (Sum of views on RELEVANT posts only)
             top_channels = industry_df.groupby('channel_username')['views'].sum().nlargest(15)
             
             report[industry] = {
                 'count': post_count,
                 'top_posts': top_posts,
                 'top_channels': top_channels,
-                'clean_df': industry_df # Keep ref to clean data for debugging
+                'clean_df': industry_df
             }
             
         return report
