@@ -833,6 +833,38 @@ class TelegramIndustryAnalyzer:
             plt.close()
 
         print(">> New chart (Activity Volume) saved successfully.")
+        
+    
+    def export_channel_audit(self, stats_report, filename="channel_audit_debug.csv"):
+        """
+        Exports sample posts from top channels to verify relevance.
+        Use this to debug why 'IranIntl' or 'Perspolis' might appear in industry stats.
+        """
+        print(f">> Exporting channel audit data to {filename}...")
+        audit_rows = []
+        
+        for industry, data in stats_report.items():
+            top_channels = data['top_channels'].index.tolist()
+            clean_df = data.get('clean_df')
+            
+            if clean_df is None or clean_df.empty: continue
+            
+            # For each top channel, grab their top 3 viewed posts in this industry
+            for channel in top_channels:
+                channel_posts = clean_df[clean_df['channel_username'] == channel].nlargest(3, 'views')
+                
+                for _, row in channel_posts.iterrows():
+                    audit_rows.append({
+                        'Industry': industry,
+                        'Channel': channel,
+                        'Views': row['views'],
+                        'Date': row['full_date'],
+                        'Snippet': row['text'][:100].replace('\n', ' ') + "..." # First 100 chars
+                    })
+        
+        if audit_rows:
+            pd.DataFrame(audit_rows).to_csv(filename, index=False, encoding='utf-8-sig')
+            print(">> Audit file created. Check content to identify false positives.")
 
 
 def load_and_clean_data(file_path: str) -> pd.DataFrame:
