@@ -803,38 +803,38 @@ class TelegramIndustryAnalyzer:
             for industry in self.keywords.keys():
                 col_name = f"is_{industry}"
                 if col_name in self.processed_data.columns: # type: ignore
+                    # Get data for this industry
                     df_ind = self.processed_data[self.processed_data[col_name] == True].copy() # type: ignore
+                    
                     if not df_ind.empty:
+                        # Ensure datetime format
                         if not pd.api.types.is_datetime64_any_dtype(df_ind['full_date']):
                             df_ind['full_date'] = pd.to_datetime(df_ind['full_date'], errors='coerce')
                         
-                        # DYNAMIC FREQUENCY LOGIC
-                        # 1. Calculate total duration
-                        min_date = df_ind['full_date'].min()
-                        max_date = df_ind['full_date'].max()
-                        days_span = (max_date - min_date).days
+                        # STANDARD RESAMPLING LOGIC
+                        # Days with no posts will automatically get a count of 0.
+                        daily_counts = df_ind.resample('D', on='full_date').size()
                         
-                        # 2. Divide by 7 to get roughly 7 intervals
-                        # If span is small (e.g. 7 days), freq = 1 Day.
-                        # If span is large (e.g. 70 days), freq = 10 Days.
-                        freq_days = max(1, days_span // 7)
-                        resample_rule = f'{freq_days}D'
-                        
-                        weekly_counts = df_ind.resample(resample_rule, on='full_date').size()
-                        
+                        # Label setup
                         label_text = make_farsi_text_readable(self.translations.get(industry, industry))
-                        sns.lineplot(x=weekly_counts.index, y=weekly_counts.values, label=label_text, linewidth=3, marker='o')
+                        
+                        # Plot
+                        # marker='o' shows exact data points
+                        sns.lineplot(x=daily_counts.index, y=daily_counts.values, label=label_text, linewidth=3, marker='o')
                         has_data = True
             
             if has_data:
+                # Legend Styling
                 leg = plt.legend(fontsize=14)
                 if persian_font:
                     for text in leg.get_texts(): text.set_fontproperties(persian_font)
                 
-                apply_style_and_save(ax, "روند زمانی تعداد پست‌ها", "تاریخ", "تعداد پست", "5_time_trend.png", y_fmt=True)
-                print("   -> Chart 5 (Dynamic Trend) generated.")
+                # Use standard helper for consistent style
+                apply_style_and_save(ax, "روند زمانی تعداد پست‌ها (روزانه)", "تاریخ", "تعداد پست", "5_time_trend.png", y_fmt=True)
+                print("   -> Chart 5 (Daily Trend) generated.")
             else:
                 print("   -> Chart 5 skipped (No data).")
+                
         except Exception as e:
             print(f"!! Error generating Chart 5: {e}")
 
