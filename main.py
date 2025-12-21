@@ -411,21 +411,19 @@ class TelegramIndustryAnalyzer:
     
     def analyze_word_frequency(self, top_n=50):
         """
-        Performs advanced NLP analysis with Context Filtering (Sports/Spam removal).
+        Performs advanced NLP analysis with Channel & Context Filtering.
         """
         print(">> Starting NLP analysis (Global & Per Industry)...")
         freq_report = {}
         
         # --- 0. PRE-PROCESSING: Dynamic Blacklists ---
         
-        # A. Stopwords from Channel Names (Keep strictly dynamic)
+        # A. Stopwords from Channel Names
         if 'channel_username' in self.processed_data.columns: # type: ignore
             channel_names = self.processed_data['channel_username'].astype(str).str.lower().unique().tolist() # type: ignore
             self.stopwords.update(channel_names) # type: ignore
             self.stopwords.update([f"@{name}" for name in channel_names]) # type: ignore
         
-        # Note: self.blacklist_pattern is already defined in _setup_hazm
-
         # --- Internal Processing Function ---
         def process_text_batch(texts_list):
             local_counter = Counter()
@@ -494,14 +492,22 @@ class TelegramIndustryAnalyzer:
             industry_df = self.processed_data[self.processed_data[col_name] == True].copy() # type: ignore
             if industry_df.empty: continue
             
-            # --- APPLY CONTEXT FILTER (Using Pre-compiled Pattern) ---
+            # --- FILTER 1: Channel Blacklist ---
+            if hasattr(self, 'channel_blacklist') and self.channel_blacklist:
+                mask_channel = industry_df['channel_username'].astype(str).str.lower().isin([x.lower() for x in self.channel_blacklist])
+                industry_df = industry_df[~mask_channel]
+            
+            if industry_df.empty: continue
+
+            # --- FILTER 2: Context Filter (Sports/Ads) ---
             initial_count = len(industry_df)
             mask_noise = industry_df['text'].str.contains(self.blacklist_pattern, regex=True, na=False)
             industry_df = industry_df[~mask_noise]
             
             filtered_count = len(industry_df)
-            if initial_count - filtered_count > 0:
-                print(f"   -> {industry}: Filtered {initial_count - filtered_count} sports/ads posts.")
+            # Only print if significantly filtered to reduce noise
+            if initial_count - filtered_count > 5:
+                print(f"   -> {industry}: NLP Filtered {initial_count - filtered_count} posts.")
             
             print(f"   -> Analyzing Industry: {industry} ({filtered_count} posts)...")
             texts = industry_df['text'].dropna().astype(str).tolist()
@@ -515,7 +521,12 @@ class TelegramIndustryAnalyzer:
             global_mask = self.processed_data[industry_cols].any(axis=1) # type: ignore
             global_df = self.processed_data[global_mask].copy() # type: ignore
             
-            # Filter Global
+            # --- FILTER 1: Channel Blacklist (Global) ---
+            if hasattr(self, 'channel_blacklist') and self.channel_blacklist:
+                mask_channel = global_df['channel_username'].astype(str).str.lower().isin([x.lower() for x in self.channel_blacklist])
+                global_df = global_df[~mask_channel]
+
+            # --- FILTER 2: Context Filter (Global) ---
             mask_noise_global = global_df['text'].str.contains(self.blacklist_pattern, regex=True, na=False)
             global_df = global_df[~mask_noise_global]
             
