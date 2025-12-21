@@ -330,26 +330,50 @@ class TelegramIndustryAnalyzer:
     def analyze_keyword_breakdown(self):
         """
         Calculates which specific keywords triggered the matches for each industry.
+        Applies Channel Blacklist and Context Filters before counting.
         Returns: dict {industry: {keyword: count}}
         """
-        print(">> Analyzing keyword breakdown (Chart 2 Data)...")
+        print(">> Analyzing keyword breakdown (Chart 2 Data) with Filters...")
         breakdown = {}
         
-        for industry, keys in self.keywords.items(): # type: ignore
+        for industry, keys in self.keywords.items():
             col_name = f"is_{industry}"
             if col_name not in self.processed_data.columns: # type: ignore
                 continue
             
-            df_ind = self.processed_data[self.processed_data[col_name] == True] # type: ignore
-            if df_ind.empty:
+            # 1. Get Initial Data for Industry
+            industry_df = self.processed_data[self.processed_data[col_name] == True].copy() # type: ignore
+            
+            # --- FILTER 1: Channel Blacklist ---
+            if hasattr(self, 'channel_blacklist') and self.channel_blacklist:
+                mask_channel = industry_df['channel_username'].astype(str).str.lower().isin([x.lower() for x in self.channel_blacklist])
+                industry_df = industry_df[~mask_channel]
+            
+            # --- FILTER 2: Context Filter (Sports/Ads) ---
+            if hasattr(self, 'blacklist_pattern') and self.blacklist_pattern:
+                initial_count = len(industry_df)
+                mask_noise = industry_df['text'].str.contains(self.blacklist_pattern, regex=True, na=False)
+                industry_df = industry_df[~mask_noise]
+                filtered_count = len(industry_df)
+                
+                # GENERIC LOGGING (Clean Approach):
+                # Instead of checking for 'Non_Ferrous_Metals', we log for ANY industry
+                if initial_count - filtered_count > 0:
+                    print(f"   -> {industry}: Filtered {initial_count - filtered_count} noise posts from keyword analysis.")
+
+            if industry_df.empty:
                 continue
                 
+            # 2. Count Keywords on CLEAN Data
             key_counts = {}
             for k in keys:
-                # Count occurrences of specific keywords
-                count = df_ind['text'].str.contains(re.escape(k), regex=True).sum()
-                if count > 0:
-                    key_counts[k] = count
+                try:
+                    # Using regex=True allows matching complex patterns if defined in setup
+                    count = industry_df['text'].str.contains(re.escape(k), regex=True).sum()
+                    if count > 0:
+                        key_counts[k] = count
+                except:
+                    continue
             
             # Sort by count descending
             breakdown[industry] = dict(sorted(key_counts.items(), key=lambda item: item[1], reverse=True))
@@ -603,7 +627,7 @@ class TelegramIndustryAnalyzer:
             
             # Save with tight bounding box to include padding
             plt.tight_layout()
-            plt.savefig(filename, dpi=300, bbox_inches='tight', pad_inches=0.5)
+            plt.savefig(filename, dpi=300, bbox_inches='tight', pad_inches=0.75)
             plt.close()
 
         # --- Helper: Add Labels & Fix Overflow ---
@@ -759,7 +783,7 @@ class TelegramIndustryAnalyzer:
                     
                     # Title with padding
                     plt.title(make_farsi_text_readable(f"ابر کلمات: {fa_group}"), # type: ignore
-                              fontproperties=persian_font, fontsize=28, pad=30, loc='center')
+                              fontproperties=persian_font, fontsize=28, pad=45, loc='center')
                     
                     # CRITICAL FIX: Save with padding
                     plt.savefig(f"4_wordcloud_{group_name}.png", dpi=300, bbox_inches='tight', pad_inches=0.5)
