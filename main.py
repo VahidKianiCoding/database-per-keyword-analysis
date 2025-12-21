@@ -368,7 +368,7 @@ class TelegramIndustryAnalyzer:
         self.translations = {
             'Petrochemical': 'پتروشیمی',
             'Steel_Chain': 'زنجیره فولاد',
-            'Non_Ferrous_Metals': 'فلزات رنگین',
+            'Non_Ferrous_Metals': 'فلزات غیرآهنی',
             'Water_Industry': 'صنعت آب',
             'Mining': 'معدن',
             'Global': 'کل صنایع'
@@ -537,36 +537,6 @@ class TelegramIndustryAnalyzer:
             
         print(">> NLP analysis complete.")
         return freq_report
-    
-    
-    def save_frequency_report(self, freq_report, filename="nlp_analysis_results.csv"):
-        """
-        Exports the word frequency analysis to a CSV file for manual inspection.
-        Columns: Category (Industry), Word, Count
-        """
-        print(f">> Exporting NLP results to {filename}...")
-        
-        all_rows = []
-        
-        # Iterate through the dictionary structure
-        for category, words_data in freq_report.items():
-            if not words_data: continue
-            
-            # words_data is a dict like {'word': count, ...}
-            for word, count in words_data.items():
-                all_rows.append({
-                    'Category': category,
-                    'Word': word,
-                    'Count': count
-                })
-        
-        if all_rows:
-            df_export = pd.DataFrame(all_rows)
-            # encoding='utf-8-sig' is crucial for opening Persian CSVs in Excel correctly
-            df_export.to_csv(filename, index=False, encoding='utf-8-sig')
-            print(">> Export successful.")
-        else:
-            print(">> Warning: No data to export.")
     
     
     def plot_visualizations(self, stats_report, freq_report, keyword_breakdown):
@@ -917,6 +887,37 @@ class TelegramIndustryAnalyzer:
         if audit_rows:
             pd.DataFrame(audit_rows).to_csv(filename, index=False, encoding='utf-8-sig')
             print(">> Audit file created. Check content to identify false positives.")
+            
+    
+    def save_frequency_report(self, freq_report, filename="nlp_analysis_results.csv"):
+        """
+        Exports the word frequency analysis to a CSV file for manual inspection.
+        Columns: Category (Industry), Word, Count
+        """
+        print(f">> Exporting NLP results to {filename}...")
+        
+        all_rows = []
+        
+        # Iterate through the dictionary structure
+        for category, words_data in freq_report.items():
+            if not words_data: continue
+            
+            # words_data is a dict like {'word': count, ...}
+            for word, count in words_data.items():
+                all_rows.append({
+                    'Category': category,
+                    'Word': word,
+                    'Count': count
+                })
+        
+        if all_rows:
+            df_export = pd.DataFrame(all_rows)
+            # encoding='utf-8-sig' is crucial for opening Persian CSVs in Excel correctly
+            df_export.to_csv(filename, index=False, encoding='utf-8-sig')
+            print(">> Export successful.")
+        else:
+            print(">> Warning: No data to export.")    
+
 
 
 def load_and_clean_data(file_path: str) -> pd.DataFrame:
