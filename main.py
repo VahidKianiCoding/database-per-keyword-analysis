@@ -1084,8 +1084,11 @@ if __name__ == "__main__":
             # Step 4: NLP & Word Cloud Analysis
             freq_stats = analyzer.analyze_word_frequency()
             
-            # <--- NEW LINE: Export the results ---
+            # Check why some words are out of proportion
             analyzer.save_frequency_report(freq_stats, "nlp_debug_output.csv")
+            
+            # Check why 'Aluminium' is #1 in Non_Ferrous_Metals
+            analyzer.debug_specific_keyword('Non_Ferrous_Metals', 'آلومینیوم', 'aluminium_debug.csv')
             
             # Step 5: Visualize
             analyzer.plot_visualizations(stats, freq_stats, keyword_stats)
