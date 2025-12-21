@@ -603,7 +603,7 @@ class TelegramIndustryAnalyzer:
         def apply_style_and_save(ax, title, xlabel, ylabel, filename, x_fmt=False, y_fmt=False):
             # Title: Centered, High Padding
             ax.set_title(make_farsi_text_readable(title), fontproperties=persian_font, 
-                         fontsize=26, pad=30, loc='center', fontweight='bold')
+                         fontsize=28, pad=45, loc='center', fontweight='bold')
             # Labels: Extra Padding
             ax.set_xlabel(make_farsi_text_readable(xlabel), fontproperties=persian_font, fontsize=18, labelpad=20)
             ax.set_ylabel(make_farsi_text_readable(ylabel), fontproperties=persian_font, fontsize=18, labelpad=20)
@@ -785,8 +785,8 @@ class TelegramIndustryAnalyzer:
                     plt.title(make_farsi_text_readable(f"ابر کلمات: {fa_group}"), # type: ignore
                               fontproperties=persian_font, fontsize=28, pad=45, loc='center')
                     
-                    # CRITICAL FIX: Save with padding
-                    plt.savefig(f"4_wordcloud_{group_name}.png", dpi=300, bbox_inches='tight', pad_inches=0.5)
+                    # Save with padding
+                    plt.savefig(f"4_wordcloud_{group_name}.png", dpi=300, bbox_inches='tight', pad_inches=0.75)
                     plt.close()
                 print("   -> Chart 4 (NLP) generated with proper margins.")
         except Exception as e:
