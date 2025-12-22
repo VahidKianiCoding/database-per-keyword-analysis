@@ -7,6 +7,7 @@ from collections import Counter
 import re
 from datetime import datetime, timedelta
 import os
+from pathlib import Path
 import logging
 from tqdm import tqdm
 from urllib.parse import quote_plus
@@ -577,13 +578,10 @@ class TelegramIndustryAnalyzer:
         sns.set_theme(style="white", context="talk")
         
         # Font Setup
-        font_paths = [
-            os.path.join("assets", "Vazirmatn-Regular.ttf"),
-            "Vazirmatn-Regular.ttf"
-        ]
+        font_paths = [Path("assets") / "Vazirmatn-Regular.ttf"]
         persian_font = None
         for fp in font_paths:
-            if os.path.exists(fp):
+            if fp.exists():
                 try:
                     persian_font = fm.FontProperties(fname=fp)
                     print(f"   -> Found font: {fp}")
@@ -770,8 +768,7 @@ class TelegramIndustryAnalyzer:
                         reshaped_freqs = freqs
                     
                     # Ensure font path is valid
-                    wc_font = font_paths[0] if os.path.exists(font_paths[0]) else (font_paths[1] if os.path.exists(font_paths[1]) else None)
-
+                    wc_font = next((p for p in font_paths if p.exists()), None)
                     wc = WordCloud(width=1920, height=1080, background_color='white', 
                                  font_path=wc_font,
                                  colormap='viridis', max_words=100)
@@ -1063,7 +1060,7 @@ if __name__ == "__main__":
         data_loaded = False
         
         # Condition 1: Fetch if forced OR file doesn't exist
-        if FORCE_FETCH or not os.path.exists(CSV_FILENAME):
+        if FORCE_FETCH or not Path(CSV_FILENAME).exists():
             print(f">> Mode: ONLINE (Reason: FORCE_FETCH={FORCE_FETCH} or File Missing)")
             
             # Calculate dynamic dates (Last 1 year for example)
